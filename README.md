@@ -1,8 +1,8 @@
 # BooruTagger
 
-Desktop app for captioning image datasets used in LoRA training. Each image keeps a sidecar `.txt` beside it: comma-separated tags, trigger word first.
+Desktop app for captioning image datasets used in LoRA training. Each image keeps a sidecar `.txt` beside it, with comma-separated tags in the order you set.
 
-The caption bench is a design mock for now. Open `design/caption-bench.html` in a browser to review it.
+Open a folder of images. Filter the working set, select one image or many, and edit the tags. Changes are written back to the `.txt` files. The earlier design mocks are in `design/`.
 
 ## Develop
 

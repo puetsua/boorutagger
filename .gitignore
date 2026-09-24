@@ -12,6 +12,10 @@ dist
 dist-ssr
 *.local
 
+# Official product screenshots saved locally for reference. Not ours to commit.
+design/references/
+design/open-ui/shots/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

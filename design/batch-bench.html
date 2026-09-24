@@ -1,0 +1,1190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>BooruTagger — working set</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Schibsted+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bench: #1e2836;
+      --bench-2: #283448;
+      --tray: #121820;
+      --sheet: #f3f6f7;
+      --sheet-2: #e7eef0;
+      --paper: #fbfcfc;
+      --ink: #1a2330;
+      --muted: #5e6e7e;
+      --faint: #8b9aaa;
+      --line: #d3dee3;
+      --line-strong: #b7c6ce;
+      --trigger: #0e7490;
+      --character: #1b7a43;
+      --copyright: #7a3e9d;
+      --artist: #c4492c;
+      --general: #3e5c86;
+      --meta: #a56b12;
+      --focus: #0e7490;
+      --sans: "Schibsted Grotesk", "Segoe UI", sans-serif;
+      --mono: "IBM Plex Mono", "Cascadia Mono", ui-monospace, monospace;
+      color-scheme: dark;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      font-family: var(--sans);
+      background: var(--bench);
+      color: var(--ink);
+      overflow: hidden;
+    }
+    button, input, textarea { font: inherit; color: inherit; }
+    button { cursor: pointer; }
+    button:focus-visible, input:focus-visible, textarea:focus-visible {
+      outline: 2px solid var(--focus);
+      outline-offset: 2px;
+    }
+    button:disabled { opacity: 0.45; cursor: default; }
+    ::selection { background: #c5e4ec; }
+
+    .app { height: 100%; display: flex; flex-direction: column; min-width: 0; }
+    .top {
+      height: 52px;
+      flex: none;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 0 16px;
+      background: var(--bench);
+      color: #e7eef2;
+      border-bottom: 1px solid #121820;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      font-size: 16px;
+    }
+    .bars { display: flex; gap: 2px; height: 16px; }
+    .bars i { width: 3px; height: 16px; display: block; }
+    .path {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: #b7c5d0;
+      min-width: 0;
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .count { flex-shrink: 0; font-variant-numeric: tabular-nums; font-size: 13px; color: #d5e0e6; }
+    .count b { font-weight: 700; }
+
+    .body {
+      flex: 1;
+      min-height: 0;
+      display: grid;
+      grid-template-columns: 212px minmax(0, 1fr) 372px;
+    }
+
+    .filters {
+      background: var(--bench);
+      color: #d5e0e6;
+      border-right: 1px solid #121820;
+      min-height: 0;
+      overflow: auto;
+      padding: 14px 12px 18px;
+    }
+    .filters h2, .grid-head h2, .sheet h2 {
+      margin: 0;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+    .kicker {
+      margin: 16px 0 6px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #8fa0ad;
+    }
+    .filters input, .sheet input[type="text"], .sheet textarea {
+      width: 100%;
+      border-radius: 3px;
+      padding: 7px 8px;
+      font-family: var(--mono);
+      font-size: 12px;
+    }
+    .filters input {
+      background: var(--tray);
+      border: 1px solid #3c4d60;
+      color: #e7eef2;
+    }
+    .preset {
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      margin-top: 6px;
+      padding: 7px 8px;
+      border-radius: 3px;
+      border: 1px solid #3c4d60;
+      background: transparent;
+      color: #d5e0e6;
+      font-size: 13px;
+      font-weight: 600;
+      text-align: left;
+    }
+    .preset span { font-family: var(--mono); font-size: 12px; font-weight: 500; color: #8fa0ad; }
+    .preset[aria-pressed="true"] { background: var(--sheet); color: var(--ink); border-color: var(--sheet); }
+    .preset[aria-pressed="true"] span { color: var(--muted); }
+    .fchips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+    .fchip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      max-width: 100%;
+      border: 1px solid #3c4d60;
+      background: var(--bench-2);
+      color: #e7eef2;
+      border-radius: 3px;
+      padding: 3px 4px 3px 6px;
+      font-family: var(--mono);
+      font-size: 11px;
+    }
+    .fchip button {
+      border: 0;
+      background: transparent;
+      color: #8fa0ad;
+      padding: 0 4px;
+      font-size: 13px;
+    }
+    .fchip button:hover { color: white; }
+    .shown {
+      margin-top: 16px;
+      font-family: var(--mono);
+      font-size: 12px;
+      color: #b7c5d0;
+    }
+
+    .stage {
+      background: var(--tray);
+      color: #d5e0e6;
+      min-width: 0;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .grid-head {
+      flex: none;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      border-bottom: 1px solid #1e2836;
+    }
+    .grid-head p { margin: 0; color: #8fa0ad; font-size: 12px; min-width: 0; }
+    .grid-head .spacer { flex: 1; }
+    .ghost {
+      flex-shrink: 0;
+      border: 1px solid #3c4d60;
+      background: transparent;
+      color: #e7eef2;
+      border-radius: 3px;
+      padding: 6px 8px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .ghost:hover { background: var(--bench-2); }
+    .hint {
+      flex: none;
+      padding: 0 12px 8px;
+      color: #7e909d;
+      font-size: 11px;
+    }
+    .grid {
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+      padding: 4px 12px 16px;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(108px, 1fr));
+      gap: 8px;
+      align-content: start;
+      user-select: none;
+    }
+    .cell {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding: 4px;
+      border: 0;
+      border-radius: 3px;
+      background: transparent;
+      color: inherit;
+      text-align: left;
+    }
+    .cell:hover { background: #1a2330; }
+    .cell[aria-pressed="true"] { box-shadow: inset 0 0 0 2px #d7e2e8; }
+    .cell[aria-current="true"] { box-shadow: inset 0 0 0 2px var(--trigger); }
+    .thumb { aspect-ratio: 3 / 4; background: #0c1117; overflow: hidden; }
+    .thumb svg { width: 100%; height: 100%; display: block; }
+    .fname {
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .fmeta { font-size: 10px; color: #8fa0ad; }
+    .fmeta.empty { color: #e2b15a; }
+    .empty-grid {
+      grid-column: 1 / -1;
+      padding: 28px 8px;
+      color: #b7c5d0;
+      font-size: 14px;
+    }
+
+    .sheet {
+      background: var(--sheet);
+      color: var(--ink);
+      min-width: 0;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      border-left: 1px solid #121820;
+    }
+    .preview {
+      flex: none;
+      display: grid;
+      grid-template-columns: 84px 1fr;
+      gap: 12px;
+      align-items: center;
+      padding: 12px;
+      background: var(--tray);
+      color: #e7eef2;
+    }
+    .preview .thumb { width: 84px; }
+    .preview .name { font-family: var(--mono); font-size: 13px; color: #f4f7f8; }
+    .preview .side { margin-top: 4px; font-family: var(--mono); font-size: 11px; color: #8fa0ad; }
+    .preview .who { margin-top: 8px; font-size: 13px; font-weight: 700; }
+    .sheet-scroll {
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+      padding: 14px 14px 8px;
+    }
+    .lede { margin: 0 0 12px; font-size: 14px; line-height: 1.45; }
+    .lede span { color: var(--muted); }
+    .section { margin: 0 0 8px; font-size: 12px; font-weight: 700; color: var(--muted); }
+    .trow {
+      display: grid;
+      grid-template-columns: 6px minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+      padding: 6px 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .swatch { width: 6px; height: 18px; }
+    .tagname {
+      font-family: var(--mono);
+      font-size: 12px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .tagops { display: flex; align-items: center; gap: 6px; }
+    .frac {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+    .quiet, .suggest button {
+      border: 1px solid var(--line-strong);
+      background: transparent;
+      color: var(--ink);
+      border-radius: 3px;
+      padding: 4px 7px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .quiet:hover, .suggest button:hover { background: var(--sheet-2); }
+    .chips, .suggest { display: flex; flex-wrap: wrap; gap: 6px; }
+    .chip {
+      display: inline-flex;
+      align-items: stretch;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 3px;
+      overflow: hidden;
+      max-width: 100%;
+      cursor: grab;
+    }
+    .chip:active { cursor: grabbing; }
+    .chip.dragging, .trow.dragging { opacity: 0.4; }
+    .trow.over { background: var(--sheet-2); }
+    .trow[draggable="true"] { cursor: grab; }
+    .chip .swatch { width: 6px; height: auto; }
+    .chip .tag { font-family: var(--mono); font-size: 12px; padding: 4px 6px 4px 8px; }
+    .chip button {
+      border: 0;
+      background: transparent;
+      color: var(--faint);
+      padding: 0 7px;
+      font-size: 14px;
+    }
+    .chip button:hover { color: var(--ink); }
+    .field { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; font-size: 12px; font-weight: 600; color: var(--muted); }
+    .sheet textarea, .sheet input[type="text"] {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      color: var(--ink);
+      font-weight: 400;
+    }
+    .sheet textarea { min-height: 96px; line-height: 1.5; resize: vertical; }
+    .suggest button { font-family: var(--mono); font-weight: 500; }
+    .foot {
+      flex: none;
+      border-top: 1px solid var(--line);
+      padding: 10px 14px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      background: var(--sheet);
+    }
+    .foot-row { display: flex; gap: 6px; align-items: center; }
+    .foot-row input { flex: 1; min-width: 0; }
+    .foot label { flex: none; font-size: 12px; font-weight: 600; color: var(--muted); }
+    .note {
+      font-size: 12px;
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+      min-height: 1.2em;
+    }
+    .tag-block { margin-top: 14px; }
+    .tag-block[hidden] { display: none; }
+    .hint-line { margin: 4px 0 8px; font-size: 12px; font-weight: 500; color: var(--muted); line-height: 1.4; }
+    dialog {
+      border: 1px solid var(--line);
+      border-radius: 3px;
+      background: var(--sheet);
+      color: var(--ink);
+      font-family: var(--sans);
+      padding: 18px 18px 14px;
+      width: min(420px, calc(100vw - 32px));
+    }
+    dialog::backdrop { background: rgba(18, 24, 32, 0.55); }
+    dialog form { display: flex; flex-direction: column; }
+    dialog h2 { margin: 0 0 12px; font-size: 16px; letter-spacing: -0.02em; }
+    .setting { display: flex; flex-direction: column; gap: 4px; margin: 0 0 14px; font-size: 14px; font-weight: 600; }
+    .setting p { margin: 0; font-size: 12px; font-weight: 500; color: var(--muted); line-height: 1.4; }
+    .setting input[type="number"] { width: 5rem; font-family: var(--mono); font-size: 13px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 3px; background: var(--paper); }
+    .check { flex-direction: row; align-items: center; gap: 8px; }
+    dialog .quiet { align-self: flex-end; }
+    .warn { margin: 8px 0 0; font-size: 13px; color: var(--artist); }
+
+    @media (max-width: 860px) {
+      body { overflow: auto; }
+      .app { height: auto; min-height: 100%; }
+      .body { grid-template-columns: 1fr; }
+      .stage { min-height: 70vh; }
+      .sheet { border-left: 0; border-top: 1px solid #121820; min-height: 70vh; }
+      .path { display: none; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      * { transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="top">
+      <div class="brand">
+        <span class="bars" aria-hidden="true">
+          <i style="background:#0e7490"></i>
+          <i style="background:#1b7a43"></i>
+          <i style="background:#7a3e9d"></i>
+          <i style="background:#c4492c"></i>
+          <i style="background:#3e5c86"></i>
+          <i style="background:#a56b12"></i>
+        </span>
+        BooruTagger
+      </div>
+      <div class="path">D:\datasets\lio-vesper</div>
+      <button class="ghost" id="open-settings" type="button">Settings</button>
+      <div class="count" id="progress">0 of 100 captioned</div>
+    </header>
+    <div class="body">
+      <aside class="filters" aria-label="Working set">
+        <h2>Working set</h2>
+        <label class="kicker" for="search">Find</label>
+        <input id="search" type="text" placeholder="Filename or tag" spellcheck="false" autocomplete="off" />
+        <div id="presets"></div>
+        <div class="kicker">Has tag</div>
+        <div class="fchips" id="has-chips"></div>
+        <input id="has-input" type="text" list="vocab" placeholder="Add a tag filter" spellcheck="false" autocomplete="off" />
+        <div class="kicker">Missing tag</div>
+        <div class="fchips" id="miss-chips"></div>
+        <input id="miss-input" type="text" list="vocab" placeholder="Add a tag filter" spellcheck="false" autocomplete="off" />
+        <datalist id="vocab"></datalist>
+        <div class="shown" id="shown"></div>
+      </aside>
+      <section class="stage" aria-label="Images">
+        <div class="grid-head">
+          <p id="hidden-note"></p>
+          <div class="spacer"></div>
+          <button class="ghost" id="select-shown" type="button">Select shown</button>
+          <button class="ghost" id="clear-sel" type="button">Clear</button>
+        </div>
+        <div class="hint">Click selects one. Ctrl click toggles. Shift click selects a range. Arrow keys move.</div>
+        <div class="grid" id="grid"></div>
+      </section>
+      <aside class="sheet" aria-label="Edit captions">
+        <div class="preview" id="preview"></div>
+        <div class="sheet-scroll" id="sheet-scroll">
+          <p class="lede" id="empty-pick" hidden>Select one image to edit its caption, or several to change them together.</p>
+          <div id="ledger" hidden></div>
+          <div id="single" hidden>
+            <p class="section">Drag tags to reorder</p>
+            <div class="chips" id="chips"></div>
+          </div>
+          <div class="tag-block" id="frequent-block">
+            <h2>Frequently used tags</h2>
+            <div class="suggest" id="suggest"></div>
+          </div>
+          <div class="tag-block" id="recent-block">
+            <h2>Last tags used</h2>
+            <p class="hint-line" id="recent-empty" hidden>Tags you add show up here, newest first.</p>
+            <div class="suggest" id="recent"></div>
+          </div>
+          <label class="field" id="sidecar-field" for="caption">
+            <span id="sidecar-label">Sidecar text</span>
+            <textarea id="caption" spellcheck="false" placeholder="comma-separated tags"></textarea>
+          </label>
+        </div>
+        <div class="foot">
+          <div id="batch-tools">
+            <div class="foot-row">
+              <label for="add-tag">Add</label>
+              <input id="add-tag" type="text" list="vocab" placeholder="Tag for every selected image" spellcheck="false" autocomplete="off" />
+              <button class="quiet" id="do-add" type="button">Add</button>
+            </div>
+            <div class="foot-row">
+              <label for="rep-from">Replace</label>
+              <input id="rep-from" type="text" value="red_jacket" spellcheck="false" autocomplete="off" />
+              <input id="rep-to" type="text" value="red_coat" spellcheck="false" autocomplete="off" />
+              <button class="quiet" id="do-replace" type="button">Replace</button>
+            </div>
+          </div>
+          <div class="note" id="note" role="status"></div>
+        </div>
+      </aside>
+    </div>
+  </div>
+  <dialog id="settings">
+    <form method="dialog">
+      <h2>Settings</h2>
+      <label class="setting check">
+        <input id="set-sidecar" type="checkbox" checked />
+        Show sidecar text
+      </label>
+      <p class="hint-line" style="margin:-8px 0 14px">The caption file in the right panel.</p>
+      <label class="setting" for="set-frequent">
+        Frequently used tags
+        <p>How many of the most common tags to show. 0 hides the list.</p>
+        <input id="set-frequent" type="number" min="0" max="20" value="8" />
+      </label>
+      <label class="setting" for="set-recent">
+        Last tags used
+        <p>Show the last n tags you added. 0 hides the list. n can be 0 to 20.</p>
+        <input id="set-recent" type="number" min="0" max="20" value="8" />
+      </label>
+      <button class="quiet" type="submit">Done</button>
+    </form>
+  </dialog>
+  <script>
+    const COLORS = {
+      trigger: "#0e7490",
+      character: "#1b7a43",
+      copyright: "#7a3e9d",
+      artist: "#c4492c",
+      general: "#3e5c86",
+      meta: "#a56b12"
+    };
+    const KNOWN = {
+      "1boy": "character",
+      vesper_line: "copyright",
+      keita_study: "artist",
+      simple_background: "meta",
+      white_background: "meta",
+      grey_background: "meta",
+      outdoors: "meta",
+      night: "meta",
+      from_behind: "meta",
+      upper_body: "meta",
+      full_body: "meta"
+    };
+    const POSES = ["standing", "sitting", "looking_at_viewer", "from_behind"];
+    const BGS = ["grey_background", "white_background", "simple_background"];
+    const PLATES = ["bust", "stand", "sit", "face", "back", "street"];
+
+    const images = [];
+    for (let n = 1; n <= 100; n++) {
+      const file = `lio_${String(n).padStart(3, "0")}.png`;
+      const plate = PLATES[n % PLATES.length];
+      if (n % 7 === 0) {
+        images.push({ file, plate, caption: "" });
+        continue;
+      }
+      const tags = ["lio_vesper", "1boy", "short_hair", "dark_blue_hair"];
+      tags.push(n % 5 === 0 ? "red_jacket" : "red_coat");
+      if (n % 2 === 0) tags.push("white_shirt");
+      if (n % 3 === 0) tags.push("amber_eyes");
+      tags.push(POSES[n % 4]);
+      tags.push(n % 4 === 0 ? "full_body" : "upper_body");
+      tags.push(BGS[n % 3]);
+      if (n % 8 === 0) tags.push("outdoors", "night");
+      if (n % 9 === 0) tags.push("keita_study");
+      if (n % 13 === 0) tags.push("vesper_line");
+      images.push({ file, plate, caption: tags.join(", ") });
+    }
+
+    let query = "";
+    let status = "all";
+    let hasTags = [];
+    let missingTags = [];
+    let selected = new Set();
+    let anchor = 0;
+    let focus = 0;
+    let editorFor = -1;
+    let note = "";
+    let showSidecar = true;
+    let frequentCount = 8;
+    let recentCount = 8;
+    let recent = [];
+
+    const grid = document.getElementById("grid");
+    const captionEl = document.getElementById("caption");
+    const noteEl = document.getElementById("note");
+
+    function esc(s) {
+      return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    }
+    function norm(s) {
+      return s.trim().toLowerCase().replace(/\s+/g, "_").replace(/,/g, "");
+    }
+    function pretty(tag) { return tag.replaceAll("_", " "); }
+    function parseTags(text) {
+      return text.split(",").map((t) => t.trim()).filter(Boolean);
+    }
+    function catOf(tag) {
+      return KNOWN[tag] || "general";
+    }
+    function tagsOf(i) { return parseTags(images[i].caption); }
+    function writeTags(i, tags) {
+      const seen = new Set();
+      const out = [];
+      tags.forEach((tag) => {
+        if (!tag || seen.has(tag)) return;
+        seen.add(tag);
+        out.push(tag);
+      });
+      images[i].caption = out.join(", ");
+    }
+    function visible() {
+      const q = query.trim().toLowerCase();
+      const qTag = norm(query);
+      return images.map((img, i) => ({ img, i })).filter(({ img }) => {
+        const tags = parseTags(img.caption);
+        const empty = !img.caption.trim();
+        if (status === "empty" && !empty) return false;
+        if (status === "done" && empty) return false;
+        if (q) {
+          const hay = `${img.file} ${tags.join(" ")} ${tags.map(pretty).join(" ")}`.toLowerCase();
+          if (!hay.includes(q) && !hay.includes(qTag)) return false;
+        }
+        if (!hasTags.every((t) => tags.includes(t))) return false;
+        if (!missingTags.every((t) => !tags.includes(t))) return false;
+        return true;
+      });
+    }
+    function presetName() {
+      const plain = !query && !hasTags.length && !missingTags.length;
+      if (plain && status === "all") return "all";
+      if (plain && status === "empty") return "empty";
+      if (!query && !missingTags.length && status === "all" && hasTags.length === 1 && hasTags[0] === "red_jacket") return "jacket";
+      return "";
+    }
+    function countWhere(pred) {
+      return images.filter(pred).length;
+    }
+
+    function plateSvg(kind) {
+      const skin = "#f0d2bf";
+      const hair = "#1c2a44";
+      const coat = "#c4492c";
+      const shirt = "#f4f1ea";
+      const eye = "#c9852a";
+      const bg = { bust: "#c5ced6", stand: "#efeae3", sit: "#d7e0da", face: "#e4d3c2", back: "#b7c0c8", street: "#1b2836" }[kind];
+      const face = (x, y, s) => `
+        <g transform="translate(${x} ${y}) scale(${s})">
+          <path d="M-22 28 H22 V48 H-22Z" fill="${skin}"/>
+          <path d="M-30 2 C-32 40 -16 54 0 56 C16 54 32 40 30 2 C24 -28 12 -38 0 -38 C-12 -38 -24 -28 -30 2Z" fill="${skin}"/>
+          <path d="M-34 -2 C-38 -34 -12 -48 0 -44 C14 -48 36 -32 32 0 C22 -16 10 -6 2 -12 C-4 -2 -12 -4 -20 -12 C-26 -2 -30 -6 -34 -2Z" fill="${hair}"/>
+          <ellipse cx="-10" cy="6" rx="2.6" ry="3" fill="${eye}"/>
+          <ellipse cx="10" cy="6" rx="2.6" ry="3" fill="${eye}"/>
+        </g>`;
+      const scenes = {
+        bust: `<rect width="360" height="480" fill="${bg}"/><path d="M0 250 C80 200 120 220 180 216 C250 220 290 200 360 250 V480 H0Z" fill="${coat}"/><path d="M158 230 L180 330 L202 230Z" fill="${shirt}"/>${face(180, 168, 1.7)}`,
+        stand: `<rect width="360" height="480" fill="${bg}"/><path d="M132 200 H228 L210 330 H190 L180 460 H168 L158 330 H132Z" fill="${coat}"/><path d="M164 206 H196 L188 260 H172Z" fill="${shirt}"/><path d="M146 330 H172 L162 468 H138Z" fill="#243044"/><path d="M188 330 H214 L224 468 H198Z" fill="#243044"/>${face(180, 118, 1.2)}`,
+        sit: `<rect width="360" height="480" fill="${bg}"/><rect x="64" y="400" width="230" height="18" fill="#8b9692"/><path d="M90 230 H250 L274 350 H200 L260 430 H100 L150 350 H80Z" fill="${coat}"/><path d="M156 236 H204 L194 292 H166Z" fill="${shirt}"/>${face(170, 130, 1.25)}`,
+        face: `<rect width="360" height="480" fill="${bg}"/><path d="M30 340 H330 L300 480 H60Z" fill="${coat}"/>${face(180, 200, 2.2)}`,
+        back: `<rect width="360" height="480" fill="${bg}"/><path d="M90 240 H270 L248 480 H112Z" fill="${coat}"/><path d="M160 246 H200 L186 320 H174Z" fill="#9a3824"/><g transform="translate(180 150) scale(1.5)"><path d="M-26 24 H26 V64 H-26Z" fill="${skin}"/><path d="M-30 16 C-24 56 -12 68 0 68 C12 68 24 56 30 16 C22 -4 12 -14 0 -14 C-12 -14 -22 -4 -30 16Z" fill="${skin}"/><path d="M-40 -6 C-34 -50 -6 -60 0 -58 C8 -60 36 -48 40 -4 C20 -28 6 -14 0 -20 C-8 -12 -22 -28 -40 -6Z" fill="${hair}"/></g>`,
+        street: `<rect width="360" height="480" fill="${bg}"/><rect x="0" y="360" width="360" height="120" fill="#121820"/><rect x="36" y="90" width="70" height="100" fill="#243246"/><rect x="258" y="48" width="8" height="312" fill="#314252"/><circle cx="262" cy="52" r="16" fill="#e2b15a"/><path d="M140 210 H230 L214 470 H154Z" fill="${coat}"/>${face(186, 124, 1.15)}`
+      };
+      return `<svg viewBox="0 0 360 480" role="img">${scenes[kind]}</svg>`;
+    }
+
+    function renderPresets() {
+      const jacket = countWhere((img) => parseTags(img.caption).includes("red_jacket"));
+      const empty = countWhere((img) => !img.caption.trim());
+      const active = presetName();
+      const rows = [
+        ["all", "All images", images.length],
+        ["empty", "Needs caption", empty],
+        ["jacket", "Uses red jacket", jacket]
+      ];
+      document.getElementById("presets").innerHTML = rows.map(([id, label, n]) => `
+        <button class="preset" type="button" data-preset="${id}" aria-pressed="${active === id}">
+          ${label}<span>${n}</span>
+        </button>`).join("");
+      document.querySelectorAll("[data-preset]").forEach((btn) => {
+        btn.addEventListener("click", () => applyPreset(btn.dataset.preset));
+      });
+    }
+    function renderFilterChips(el, tags, kind) {
+      el.innerHTML = "";
+      tags.forEach((tag) => {
+        const chip = document.createElement("span");
+        chip.className = "fchip";
+        chip.innerHTML = `<span>${esc(pretty(tag))}</span>`;
+        const x = document.createElement("button");
+        x.type = "button";
+        x.setAttribute("aria-label", `Remove ${tag} filter`);
+        x.textContent = "×";
+        x.addEventListener("click", () => {
+          if (kind === "has") hasTags = hasTags.filter((t) => t !== tag);
+          else missingTags = missingTags.filter((t) => t !== tag);
+          note = `${visible().length} shown`;
+          paint();
+        });
+        chip.appendChild(x);
+        el.appendChild(chip);
+      });
+    }
+    function renderGrid() {
+      const vis = visible();
+      const top = grid.scrollTop;
+      grid.innerHTML = "";
+      if (!vis.length) {
+        grid.innerHTML = `<div class="empty-grid">No images match this working set. Clear a tag filter or choose All images.</div>`;
+        return;
+      }
+      vis.forEach(({ img, i }) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "cell";
+        btn.dataset.index = String(i);
+        if (selected.has(i)) btn.setAttribute("aria-pressed", "true");
+        if (i === focus) btn.setAttribute("aria-current", "true");
+        const tags = parseTags(img.caption);
+        const empty = !tags.length;
+        btn.title = empty ? "No caption" : tags.map(pretty).join(", ");
+        btn.innerHTML = `
+          <span class="thumb">${plateSvg(img.plate)}</span>
+          <span class="fname">${esc(img.file)}</span>
+          <span class="fmeta ${empty ? "empty" : ""}">${empty ? "Needs caption" : `${tags.length} tags`}</span>`;
+        btn.addEventListener("click", (e) => onCell(i, e));
+        grid.appendChild(btn);
+      });
+      grid.scrollTop = top;
+    }
+    function renderPreview() {
+      const img = images[focus];
+      const n = selected.size;
+      const who = n === 0 ? "Nothing selected" : n === 1 ? "1 image" : `${n} images`;
+      document.getElementById("preview").innerHTML = `
+        <span class="thumb">${plateSvg(img.plate)}</span>
+        <div>
+          <div class="name">${esc(img.file)}</div>
+          <div class="side">${esc(img.file.replace(/\.png$/, ".txt"))}</div>
+          <div class="who">${who}</div>
+        </div>`;
+    }
+    function renderLedger() {
+      const ledger = document.getElementById("ledger");
+      const idxs = [...selected];
+      const counts = new Map();
+      idxs.forEach((i) => tagsOf(i).forEach((t) => counts.set(t, (counts.get(t) || 0) + 1)));
+      const n = idxs.length;
+      const shared = [];
+      const partial = [];
+      counts.forEach((c, tag) => (c === n ? shared : partial).push(c === n ? tag : { tag, c }));
+      const source = selected.has(focus) ? focus : idxs[0];
+      const sharedSet = new Set(shared);
+      const sharedOrder = tagsOf(source).filter((tag) => sharedSet.has(tag));
+      partial.sort((a, b) => b.c - a.c || a.tag.localeCompare(b.tag));
+      const row = (tag, frac, extra, handle) => `
+        <div class="trow" ${handle ? `data-shared="${esc(tag)}" tabindex="0"` : ""}>
+          <i class="swatch" style="background:${COLORS[catOf(tag)]}"></i>
+          <span class="tagname">${esc(pretty(tag))}</span>
+          <span class="tagops">
+            <span class="frac">${frac}</span>
+            ${extra}
+            <button class="quiet" type="button" data-remove="${esc(tag)}">Remove</button>
+          </span>
+        </div>`;
+      let html = "";
+      if (sharedOrder.length) {
+        html += `<div class="section">On every image. Drag to reorder.</div>`;
+        html += sharedOrder.map((tag) => row(tag, `${n}/${n}`, "", true)).join("");
+      }
+      if (partial.length) {
+        html += `<div class="section">On some</div>`;
+        html += partial.map(({ tag, c }) => row(tag, `${c}/${n}`, `<button class="quiet" type="button" data-rest="${esc(tag)}">Add to rest</button>`)).join("");
+      }
+      if (!shared.length && !partial.length) {
+        html += `<p class="lede">None of the selected images have a caption yet.</p>`;
+      }
+      ledger.innerHTML = html;
+      ledger.querySelectorAll("[data-remove]").forEach((btn) => {
+        btn.addEventListener("click", () => removeTag(btn.dataset.remove));
+      });
+      ledger.querySelectorAll("[data-rest]").forEach((btn) => {
+        btn.addEventListener("click", () => addTag(btn.dataset.rest));
+      });
+      bindReorder([...ledger.querySelectorAll("[data-shared]")], (from, to) => reorderShared(sharedOrder, from, to));
+    }
+    function renderSingle() {
+      const i = [...selected][0];
+      const tags = tagsOf(i);
+      if (editorFor !== i) {
+        captionEl.value = images[i].caption;
+        editorFor = i;
+      }
+      const chips = document.getElementById("chips");
+      chips.innerHTML = "";
+      tags.forEach((tag, n) => {
+        const chip = document.createElement("span");
+        chip.className = "chip";
+        chip.tabIndex = 0;
+        chip.dataset.index = String(n);
+        chip.innerHTML = `<i class="swatch" style="background:${COLORS[catOf(tag)]}"></i><span class="tag">${esc(pretty(tag))}</span>`;
+        const x = document.createElement("button");
+        x.type = "button";
+        x.setAttribute("aria-label", `Remove ${tag}`);
+        x.textContent = "×";
+        x.addEventListener("click", () => {
+          writeTags(i, tags.filter((_, k) => k !== n));
+          editorFor = -1;
+          note = "Saved";
+          paint();
+        });
+        chip.appendChild(x);
+        chips.appendChild(chip);
+      });
+      bindReorder([...chips.children], (from, to) => {
+        const next = tags.slice();
+        const [tag] = next.splice(from, 1);
+        next.splice(to, 0, tag);
+        writeTags(i, next);
+        editorFor = -1;
+        note = "Reordered tags";
+        paint();
+        document.querySelector(`#chips .chip[data-index="${to}"]`)?.focus();
+      }, true);
+    }
+    function fillTagButtons(el, tags) {
+      el.innerHTML = "";
+      tags.forEach((tag) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.textContent = pretty(tag);
+        b.addEventListener("click", () => {
+          if (!selected.size) {
+            selected.add(focus);
+            anchor = focus;
+          }
+          addTag(tag);
+        });
+        el.appendChild(b);
+      });
+    }
+    function renderTagLists() {
+      const frequentBlock = document.getElementById("frequent-block");
+      frequentBlock.hidden = frequentCount === 0;
+      const suggest = document.getElementById("suggest");
+      if (frequentCount > 0) {
+        const freq = new Map();
+        images.forEach((img) => parseTags(img.caption).forEach((t) => freq.set(t, (freq.get(t) || 0) + 1)));
+        const skip = new Set();
+        if (selected.size === 1) tagsOf([...selected][0]).forEach((t) => skip.add(t));
+        else if (selected.size > 1) {
+          const counts = new Map();
+          selected.forEach((i) => tagsOf(i).forEach((t) => counts.set(t, (counts.get(t) || 0) + 1)));
+          counts.forEach((c, t) => { if (c === selected.size) skip.add(t); });
+        }
+        const list = [...freq.entries()]
+          .filter(([t]) => !skip.has(t))
+          .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+          .slice(0, frequentCount)
+          .map(([t]) => t);
+        if (!list.length) suggest.textContent = "Every frequent tag is already on this selection.";
+        else fillTagButtons(suggest, list);
+      }
+      const recentBlock = document.getElementById("recent-block");
+      recentBlock.hidden = recentCount === 0;
+      const recentEl = document.getElementById("recent");
+      const empty = document.getElementById("recent-empty");
+      if (recentCount > 0) {
+        const list = recent.slice(0, recentCount);
+        empty.hidden = list.length > 0;
+        if (list.length) fillTagButtons(recentEl, list);
+        else recentEl.innerHTML = "";
+      }
+    }
+    function renderSidecar() {
+      const field = document.getElementById("sidecar-field");
+      field.hidden = !showSidecar;
+      const img = images[focus];
+      document.getElementById("sidecar-label").textContent = `Sidecar text · ${img.file.replace(/\.png$/, ".txt")}`;
+      if (document.activeElement !== captionEl && editorFor !== focus) {
+        captionEl.value = img.caption;
+        editorFor = focus;
+      }
+    }
+    function remember(tag) {
+      const clean = norm(tag);
+      if (!clean) return;
+      recent = [clean, ...recent.filter((t) => t !== clean)].slice(0, 20);
+    }
+    function rememberAdded(before, after) {
+      const had = new Set(before);
+      after.forEach((tag) => { if (!had.has(tag)) remember(tag); });
+    }
+    function renderSheet() {
+      const n = selected.size;
+      document.getElementById("empty-pick").hidden = n !== 0;
+      document.getElementById("ledger").hidden = n < 2;
+      document.getElementById("single").hidden = n !== 1;
+      document.getElementById("batch-tools").hidden = n < 2;
+      if (n > 1) renderLedger();
+      if (n === 1) renderSingle();
+      renderTagLists();
+      renderSidecar();
+    }
+    function renderVocab() {
+      const tags = new Set();
+      images.forEach((img) => parseTags(img.caption).forEach((t) => tags.add(t)));
+      document.getElementById("vocab").innerHTML = [...tags].sort().map((t) => `<option value="${esc(pretty(t))}"></option>`).join("");
+    }
+    function paint() {
+      const vis = visible();
+      const shownIds = new Set(vis.map((x) => x.i));
+      const hiddenSelected = [...selected].filter((i) => !shownIds.has(i)).length;
+      const captioned = images.filter((img) => img.caption.trim()).length;
+      document.getElementById("progress").innerHTML = `<b>${captioned}</b> of ${images.length} captioned`;
+      document.getElementById("shown").textContent = `${vis.length} of ${images.length} shown`;
+      document.getElementById("hidden-note").textContent = hiddenSelected
+        ? `${hiddenSelected} selected ${hiddenSelected === 1 ? "is" : "are"} hidden by the working set`
+        : `${selected.size} selected`;
+      renderPresets();
+      renderFilterChips(document.getElementById("has-chips"), hasTags, "has");
+      renderFilterChips(document.getElementById("miss-chips"), missingTags, "missing");
+      renderVocab();
+      renderGrid();
+      if (!shownIds.has(focus) && vis.length) focus = vis[0].i;
+      renderPreview();
+      renderSheet();
+      noteEl.textContent = note;
+    }
+
+    function onCell(i, e) {
+      const vis = visible().map((x) => x.i);
+      if (e.shiftKey) {
+        e.preventDefault();
+        const a = vis.indexOf(anchor);
+        const b = vis.indexOf(i);
+        if (a === -1 || b === -1) {
+          selected = new Set([i]);
+        } else {
+          if (!e.ctrlKey && !e.metaKey) selected = new Set();
+          const [lo, hi] = a < b ? [a, b] : [b, a];
+          for (let k = lo; k <= hi; k++) selected.add(vis[k]);
+        }
+      } else if (e.ctrlKey || e.metaKey) {
+        if (selected.has(i)) selected.delete(i);
+        else selected.add(i);
+        anchor = i;
+      } else {
+        selected = new Set([i]);
+        anchor = i;
+      }
+      focus = i;
+      editorFor = -1;
+      note = selected.size ? `${selected.size} selected` : "Nothing selected";
+      paint();
+    }
+    function applyPreset(name) {
+      query = "";
+      document.getElementById("search").value = "";
+      hasTags = [];
+      missingTags = [];
+      status = "all";
+      if (name === "empty") status = "empty";
+      if (name === "jacket") hasTags = ["red_jacket"];
+      const vis = visible();
+      selected = name === "all" ? new Set() : new Set(vis.map((x) => x.i));
+      anchor = vis.length ? vis[0].i : 0;
+      focus = anchor;
+      editorFor = -1;
+      note = name === "all" ? "Nothing selected" : `${selected.size} selected`;
+      paint();
+    }
+    function addFilter(kind, raw) {
+      const tag = norm(raw);
+      if (!tag) return;
+      const list = kind === "has" ? hasTags : missingTags;
+      if (!list.includes(tag)) list.push(tag);
+      note = `${visible().length} shown`;
+      paint();
+    }
+    function addTag(tag) {
+      const clean = norm(tag);
+      if (!clean || !selected.size) return;
+      remember(clean);
+      let n = 0;
+      selected.forEach((i) => {
+        const tags = tagsOf(i);
+        if (tags.includes(clean)) return;
+        n++;
+        writeTags(i, [...tags, clean]);
+      });
+      editorFor = -1;
+      note = n ? `Added ${pretty(clean)} to ${n} images` : `${pretty(clean)} is already on the selection`;
+      paint();
+    }
+    function removeTag(tag) {
+      let n = 0;
+      selected.forEach((i) => {
+        const tags = tagsOf(i);
+        if (!tags.includes(tag)) return;
+        n++;
+        writeTags(i, tags.filter((t) => t !== tag));
+      });
+      editorFor = -1;
+      note = `Removed ${pretty(tag)} from ${n} images`;
+      paint();
+    }
+    function reorderShared(order, from, to) {
+      const next = order.slice();
+      const [tag] = next.splice(from, 1);
+      next.splice(to, 0, tag);
+      const set = new Set(next);
+      selected.forEach((i) => {
+        const tags = tagsOf(i);
+        const present = next.filter((item) => tags.includes(item));
+        let k = 0;
+        writeTags(i, tags.map((item) => (set.has(item) ? present[k++] : item)));
+      });
+      editorFor = -1;
+      note = "Reordered tags";
+      paint();
+      document.querySelector(`[data-shared="${CSS.escape(tag)}"]`)?.focus();
+    }
+    function bindReorder(rows, onMove, horizontal) {
+      rows.forEach((row, index) => {
+        row.draggable = true;
+        row.addEventListener("dragstart", (e) => {
+          if (e.target.closest("button")) {
+            e.preventDefault();
+            return;
+          }
+          row.classList.add("dragging");
+          e.dataTransfer.effectAllowed = "move";
+          e.dataTransfer.setData("text/plain", String(index));
+        });
+        row.addEventListener("dragend", () => row.classList.remove("dragging", "over"));
+        row.addEventListener("dragover", (e) => {
+          e.preventDefault();
+          row.classList.add("over");
+        });
+        row.addEventListener("dragleave", () => row.classList.remove("over"));
+        row.addEventListener("drop", (e) => {
+          e.preventDefault();
+          row.classList.remove("over");
+          const raw = e.dataTransfer.getData("text/plain");
+          const start = Number(raw);
+          if (raw === "" || !Number.isInteger(start) || start === index) return;
+          onMove(start, index);
+        });
+        row.addEventListener("keydown", (e) => {
+          const prev = horizontal ? "ArrowLeft" : "ArrowUp";
+          const nextKey = horizontal ? "ArrowRight" : "ArrowDown";
+          if (e.key !== prev && e.key !== nextKey) return;
+          if (e.target.closest("button")) return;
+          e.preventDefault();
+          e.stopPropagation();
+          const to = index + (e.key === prev ? -1 : 1);
+          if (to < 0 || to >= rows.length) return;
+          onMove(index, to);
+        });
+      });
+    }
+
+    document.getElementById("search").addEventListener("input", (e) => {
+      query = e.target.value;
+      note = `${visible().length} shown`;
+      paint();
+    });
+    document.getElementById("has-input").addEventListener("keydown", (e) => {
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+      addFilter("has", e.target.value);
+      e.target.value = "";
+    });
+    document.getElementById("miss-input").addEventListener("keydown", (e) => {
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+      addFilter("missing", e.target.value);
+      e.target.value = "";
+    });
+    document.getElementById("select-shown").addEventListener("click", () => {
+      const vis = visible();
+      selected = new Set(vis.map((x) => x.i));
+      if (vis.length) {
+        anchor = vis[0].i;
+        focus = vis[0].i;
+      }
+      editorFor = -1;
+      note = `${selected.size} selected`;
+      paint();
+    });
+    document.getElementById("clear-sel").addEventListener("click", () => {
+      selected = new Set();
+      editorFor = -1;
+      note = "Nothing selected";
+      paint();
+    });
+    document.getElementById("do-add").addEventListener("click", () => {
+      addTag(document.getElementById("add-tag").value);
+      document.getElementById("add-tag").value = "";
+    });
+    document.getElementById("add-tag").addEventListener("keydown", (e) => {
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+      addTag(e.target.value);
+      e.target.value = "";
+    });
+    document.getElementById("do-replace").addEventListener("click", () => {
+      const from = norm(document.getElementById("rep-from").value);
+      const to = norm(document.getElementById("rep-to").value);
+      if (!from || !to || from === to || !selected.size) return;
+      let n = 0;
+      selected.forEach((i) => {
+        const tags = tagsOf(i);
+        if (!tags.includes(from)) return;
+        n++;
+        writeTags(i, tags.map((t) => (t === from ? to : t)));
+      });
+      if (n) remember(to);
+      editorFor = -1;
+      note = n ? `Replaced ${pretty(from)} on ${n} images` : `No selected image has ${pretty(from)}`;
+      paint();
+    });
+    captionEl.addEventListener("focus", () => {
+      captionEl.dataset.before = images[focus].caption;
+    });
+    captionEl.addEventListener("input", () => {
+      images[focus].caption = captionEl.value;
+      editorFor = focus;
+      note = "Unsaved";
+      paint();
+      editorFor = focus;
+    });
+    captionEl.addEventListener("blur", () => {
+      const before = parseTags(captionEl.dataset.before || "");
+      rememberAdded(before, parseTags(captionEl.value));
+      note = "Saved";
+      paint();
+    });
+    document.getElementById("open-settings").addEventListener("click", () => {
+      document.getElementById("set-sidecar").checked = showSidecar;
+      document.getElementById("set-frequent").value = String(frequentCount);
+      document.getElementById("set-recent").value = String(recentCount);
+      document.getElementById("settings").showModal();
+    });
+    function clampCount(value) {
+      const n = Math.round(Number(value));
+      if (!Number.isFinite(n)) return 0;
+      return Math.min(20, Math.max(0, n));
+    }
+    document.getElementById("set-sidecar").addEventListener("change", (e) => {
+      showSidecar = e.target.checked;
+      paint();
+    });
+    document.getElementById("set-frequent").addEventListener("input", (e) => {
+      frequentCount = clampCount(e.target.value);
+      e.target.value = String(frequentCount);
+      paint();
+    });
+    document.getElementById("set-recent").addEventListener("input", (e) => {
+      recentCount = clampCount(e.target.value);
+      e.target.value = String(recentCount);
+      paint();
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.target.matches("input, textarea") || e.target.closest(".chip, .trow")) return;
+      if (e.key === "Escape") {
+        selected = new Set();
+        note = "Nothing selected";
+        paint();
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") {
+        e.preventDefault();
+        document.getElementById("select-shown").click();
+        return;
+      }
+      const vis = visible().map((x) => x.i);
+      if (!vis.length) return;
+      const cols = getComputedStyle(grid).gridTemplateColumns.split(" ").length || 1;
+      const pos = Math.max(0, vis.indexOf(focus));
+      let next = pos;
+      if (e.key === "ArrowRight") next = Math.min(vis.length - 1, pos + 1);
+      else if (e.key === "ArrowLeft") next = Math.max(0, pos - 1);
+      else if (e.key === "ArrowDown") next = Math.min(vis.length - 1, pos + cols);
+      else if (e.key === "ArrowUp") next = Math.max(0, pos - cols);
+      else return;
+      e.preventDefault();
+      onCell(vis[next], e);
+      const cell = grid.querySelector(`[data-index="${vis[next]}"]`);
+      if (cell) cell.scrollIntoView({ block: "nearest" });
+    });
+
+    images.forEach((img, i) => {
+      if (parseTags(img.caption).includes("red_jacket")) selected.add(i);
+    });
+    focus = [...selected][0] ?? 0;
+    anchor = focus;
+    note = `${selected.size} selected`;
+    paint();
+  </script>
+</body>
+</html>

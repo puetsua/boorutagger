@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>BooruTagger — open UI mock</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Roboto:wght@400;500;700&family=Source+Code+Pro:wght@500&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="shared.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="top">
+      <div class="brand"><span class="mark">B</span> BooruTagger</div>
+      <div class="path">D:\datasets\lio-vesper</div>
+      <span class="sys" id="sys"></span>
+      <button class="btn" type="button">Settings</button>
+      <div class="count"><b>86</b> of 100 captioned</div>
+    </header>
+    <div class="body">
+      <aside class="filters" aria-label="Working set">
+        <h2>Working set</h2>
+        <label class="kicker" for="search">Find</label>
+        <input id="search" type="text" placeholder="Filename or tag" value="" />
+        <button class="preset" type="button">All images <span>100</span></button>
+        <button class="preset" type="button">Needs caption <span>14</span></button>
+        <div class="kicker">Has tag</div>
+        <div class="fchips">
+          <span class="fchip">red_jacket <button type="button" aria-label="Remove">×</button></span>
+        </div>
+        <input type="text" placeholder="Add a tag filter" />
+        <div class="kicker">Missing tag</div>
+        <input type="text" placeholder="Add a tag filter" />
+        <div class="shown">18 shown · 18 selected</div>
+      </aside>
+      <section class="stage" aria-label="Images">
+        <div class="grid-head">
+          <p>Click selects one. Ctrl click toggles. Shift click selects a range.</p>
+          <div class="spacer"></div>
+          <button class="btn" type="button">Select shown</button>
+          <button class="btn" type="button">Clear</button>
+        </div>
+        <div class="hint">Arrow keys move. Shared tags can be reordered.</div>
+        <div class="grid" id="grid"></div>
+      </section>
+      <aside class="sheet" aria-label="Edit captions">
+        <div class="preview">
+          <div class="thumb" id="focus-thumb"></div>
+          <div>
+            <div class="name">lio_005.png</div>
+            <div class="side">lio_005.txt</div>
+            <div class="who">18 selected</div>
+          </div>
+        </div>
+        <div class="sheet-scroll">
+          <p class="lede">On every image <span>5 tags</span></p>
+          <div class="trow"><span class="tagname">lio_vesper</span></div>
+          <div class="trow"><span class="tagname">1boy</span></div>
+          <div class="trow"><span class="tagname">short_hair</span></div>
+          <div class="trow"><span class="tagname">dark_blue_hair</span></div>
+          <div class="trow"><span class="tagname">red_jacket</span></div>
+          <p class="section kicker">On some</p>
+          <div class="trow">
+            <span class="tagname">white_shirt</span>
+            <span class="fmeta">9/18 <button class="quiet" type="button">Add to rest</button></span>
+          </div>
+          <div class="tag-block">
+            <h2 class="section kicker">Frequently used tags</h2>
+            <div class="suggest">
+              <button type="button">amber_eyes</button>
+              <button type="button">sitting</button>
+              <button type="button">upper_body</button>
+              <button type="button">simple_background</button>
+            </div>
+          </div>
+          <div class="tag-block">
+            <h2 class="section kicker">Last tags used</h2>
+            <div class="suggest">
+              <button type="button">red_coat</button>
+              <button type="button">white_shirt</button>
+            </div>
+          </div>
+          <label class="field" for="caption">
+            Sidecar text
+            <textarea id="caption">lio_vesper, 1boy, short_hair, dark_blue_hair, red_jacket, white_shirt, looking_at_viewer, upper_body, grey_background</textarea>
+          </label>
+        </div>
+        <div class="foot">
+          <div class="foot-row">
+            <label for="add-tag">Add</label>
+            <input id="add-tag" type="text" placeholder="Tag for every selected image" />
+            <button class="btn primary" type="button">Add</button>
+          </div>
+          <div class="foot-row">
+            <label>Replace</label>
+            <input type="text" value="red_jacket" />
+            <input type="text" value="red_coat" />
+            <button class="btn" type="button">Replace</button>
+          </div>
+          <div class="note">18 selected · filter is Has tag red_jacket</div>
+        </div>
+      </aside>
+    </div>
+  </div>
+  <script>
+    const THEMES = {
+      m3: "Material 3 · Google",
+      fluent: "Fluent 2 · Microsoft",
+      carbon: "Carbon · IBM",
+      spectrum: "Spectrum · Adobe",
+      adwaita: "Adwaita · GNOME"
+    };
+    const theme = new URLSearchParams(location.search).get("t") || "m3";
+    document.documentElement.dataset.theme = THEMES[theme] ? theme : "m3";
+    document.title = "BooruTagger — " + (THEMES[theme] || THEMES.m3);
+    document.getElementById("sys").textContent = THEMES[theme] || THEMES.m3;
+
+    function thumb(n) {
+      const hair = n % 3 === 0 ? "#1a2740" : "#243044";
+      const coat = n % 2 === 0 ? "#b42318" : "#c2410c";
+      const face = "#e8d4c4";
+      return `<svg viewBox="0 0 90 120" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect width="90" height="120" fill="#c8c4bf"/>
+        <rect x="18" y="58" width="54" height="62" rx="4" fill="${coat}"/>
+        <circle cx="45" cy="40" r="18" fill="${face}"/>
+        <path d="M27 38c2-16 34-16 36 0v8H27z" fill="${hair}"/>
+      </svg>`;
+    }
+    const grid = document.getElementById("grid");
+    const files = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90];
+    files.forEach((n, i) => {
+      const cell = document.createElement("button");
+      cell.type = "button";
+      cell.className = "cell sel" + (i === 0 ? " cur" : "");
+      cell.innerHTML = `<div class="thumb">${thumb(n)}</div>
+        <div class="fname">lio_${String(n).padStart(3, "0")}.png</div>
+        <div class="fmeta">${n % 7 === 0 ? "empty" : "8 tags"}</div>`;
+      grid.appendChild(cell);
+    });
+    document.getElementById("focus-thumb").innerHTML = thumb(5);
+  </script>
+</body>
+</html>

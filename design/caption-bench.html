@@ -334,7 +334,11 @@
       border-radius: 3px;
       overflow: hidden;
       max-width: 100%;
+      cursor: grab;
     }
+    .chip:active { cursor: grabbing; }
+    .chip.dragging { opacity: 0.4; }
+    .chip.over { background: var(--sheet-2); }
     .chip .swatch { width: 6px; flex: none; }
     .chip .tag {
       font-family: var(--mono);
@@ -397,6 +401,26 @@
       color: var(--ink);
     }
     .empty-note span { color: var(--muted); }
+    .tag-block { margin-top: 14px; }
+    .tag-block[hidden] { display: none; }
+    .hint-line { margin: 4px 0 8px; font-size: 12px; font-weight: 500; color: var(--muted); line-height: 1.4; }
+    dialog {
+      border: 1px solid var(--line);
+      border-radius: 3px;
+      background: var(--sheet);
+      color: var(--ink);
+      font-family: var(--sans);
+      padding: 18px 18px 14px;
+      width: min(420px, calc(100vw - 32px));
+    }
+    dialog::backdrop { background: rgba(18, 24, 32, 0.55); }
+    dialog form { display: flex; flex-direction: column; }
+    dialog h2 { margin: 0 0 12px; font-size: 16px; letter-spacing: -0.02em; text-transform: none; }
+    .setting { display: flex; flex-direction: column; gap: 4px; margin: 0 0 14px; font-size: 14px; font-weight: 600; }
+    .setting p { margin: 0; font-size: 12px; font-weight: 500; color: var(--muted); line-height: 1.4; }
+    .setting input[type="number"] { width: 5rem; font-family: var(--mono); font-size: 13px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 3px; background: var(--paper); color: var(--ink); }
+    .check { flex-direction: row; align-items: center; gap: 8px; }
+    dialog .quiet { align-self: flex-end; }
 
     @media (max-width: 1080px) {
       body { overflow: auto; }
@@ -432,6 +456,7 @@
       </div>
       <button class="path" id="open-folder" type="button">D:\datasets\lio-vesper</button>
       <button class="ghost" id="open-folder-2" type="button">Open folder</button>
+      <button class="ghost" id="open-settings" type="button">Settings</button>
       <div class="count" id="progress">5 of 6 captioned</div>
     </header>
     <div class="body">
@@ -462,28 +487,28 @@
           <p class="empty-note" id="empty-note" hidden>
             No caption yet. <span id="empty-file">lio_04.txt</span> is created when you add the first tag.
           </p>
-          <label class="field">
-            Trigger word
-            <input id="trigger" type="text" value="lio_vesper" spellcheck="false" autocomplete="off" />
-          </label>
-          <p class="warn" id="warn" role="status"></p>
+          <p class="empty-note" id="reorder-hint">Drag tags to reorder.</p>
           <div class="chips" id="chips" aria-label="Tags"></div>
           <ul class="legend" aria-label="Tag colors">
-            <li><i style="background:#0e7490"></i>trigger</li>
             <li><i style="background:#1b7a43"></i>character</li>
             <li><i style="background:#7a3e9d"></i>copyright</li>
             <li><i style="background:#c4492c"></i>artist</li>
             <li><i style="background:#3e5c86"></i>general</li>
             <li><i style="background:#a56b12"></i>meta</li>
           </ul>
-          <label class="field">
-            Sidecar text
-            <textarea id="caption" spellcheck="false" placeholder="comma-separated tags, trigger word first"></textarea>
-          </label>
-          <div>
-            <h2 style="margin-bottom:8px">Used in this dataset</h2>
+          <div class="tag-block" id="frequent-block">
+            <h2>Frequently used tags</h2>
             <div class="suggest" id="suggest"></div>
           </div>
+          <div class="tag-block" id="recent-block">
+            <h2>Last tags used</h2>
+            <p class="hint-line" id="recent-empty" hidden>Tags you add show up here, newest first.</p>
+            <div class="suggest" id="recent"></div>
+          </div>
+          <label class="field" id="sidecar-field">
+            Sidecar text
+            <textarea id="caption" spellcheck="false" placeholder="comma-separated tags"></textarea>
+          </label>
           <div class="row-actions">
             <button class="quiet" id="copy-prev" type="button">Copy previous</button>
             <button class="quiet" id="clear-tags" type="button">Clear tags</button>
@@ -493,6 +518,27 @@
       </aside>
     </div>
   </div>
+  <dialog id="settings">
+    <form method="dialog">
+      <h2>Settings</h2>
+      <label class="setting check">
+        <input id="set-sidecar" type="checkbox" checked />
+        Show sidecar text
+      </label>
+      <p class="hint-line" style="margin:-8px 0 14px">The caption file in the right panel.</p>
+      <label class="setting" for="set-frequent">
+        Frequently used tags
+        <p>How many of the most common tags to show. 0 hides the list.</p>
+        <input id="set-frequent" type="number" min="0" max="20" value="8" />
+      </label>
+      <label class="setting" for="set-recent">
+        Last tags used
+        <p>Show the last n tags you added. 0 hides the list. n can be 0 to 20.</p>
+        <input id="set-recent" type="number" min="0" max="20" value="8" />
+      </label>
+      <button class="quiet" type="submit">Done</button>
+    </form>
+  </dialog>
   <script>
     const COLORS = {
       trigger: "#0e7490",
@@ -503,7 +549,6 @@
       meta: "#a56b12"
     };
     const KNOWN = {
-      lio_vesper: "trigger",
       "1boy": "character",
       vesper_line: "copyright",
       keita_study: "artist",
@@ -527,23 +572,24 @@
       { file: "lio_06.png", plate: "street", caption: "lio_vesper, 1boy, red_coat, standing, outdoors, night, street, vesper_line, looking_at_viewer" }
     ];
 
-    let trigger = "lio_vesper";
     let index = 0;
     let filter = "all";
     let dirty = false;
     let saveTimer = 0;
+    let showSidecar = true;
+    let frequentCount = 8;
+    let recentCount = 8;
+    let recent = [];
 
     const thumbsEl = document.getElementById("thumbs");
     const captionEl = document.getElementById("caption");
     const chipsEl = document.getElementById("chips");
     const suggestEl = document.getElementById("suggest");
     const statusEl = document.getElementById("status");
-    const warnEl = document.getElementById("warn");
     const emptyNote = document.getElementById("empty-note");
     const emptyFile = document.getElementById("empty-file");
 
     function catOf(tag) {
-      if (tag === trigger) return "trigger";
       return KNOWN[tag] || "general";
     }
     function parseTags(text) {
@@ -662,6 +708,8 @@
         const cat = catOf(tag);
         const chip = document.createElement("span");
         chip.className = "chip";
+        chip.tabIndex = 0;
+        chip.draggable = true;
         chip.innerHTML = `<i class="swatch" style="background:${COLORS[cat]}"></i><span class="tag">${tag.replaceAll("_", " ")}</span>`;
         const x = document.createElement("button");
         x.type = "button";
@@ -671,40 +719,104 @@
           const next = tags.filter((_, i) => i !== n);
           setCaption(next.join(", "), true);
         });
+        chip.addEventListener("dragstart", (e) => {
+          if (e.target.closest("button")) {
+            e.preventDefault();
+            return;
+          }
+          chip.classList.add("dragging");
+          e.dataTransfer.effectAllowed = "move";
+          e.dataTransfer.setData("text/plain", String(n));
+        });
+        chip.addEventListener("dragend", () => chip.classList.remove("dragging", "over"));
+        chip.addEventListener("dragover", (e) => {
+          e.preventDefault();
+          chip.classList.add("over");
+        });
+        chip.addEventListener("dragleave", () => chip.classList.remove("over"));
+        chip.addEventListener("drop", (e) => {
+          e.preventDefault();
+          const raw = e.dataTransfer.getData("text/plain");
+          const from = Number(raw);
+          if (raw === "" || !Number.isInteger(from) || from === n) return;
+          const next = tags.slice();
+          const [moved] = next.splice(from, 1);
+          next.splice(n, 0, moved);
+          setCaption(next.join(", "), true);
+        });
+        chip.addEventListener("keydown", (e) => {
+          if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+          if (e.target.closest("button")) return;
+          e.preventDefault();
+          e.stopPropagation();
+          const to = n + (e.key === "ArrowLeft" ? -1 : 1);
+          if (to < 0 || to >= tags.length) return;
+          const next = tags.slice();
+          const [moved] = next.splice(n, 1);
+          next.splice(to, 0, moved);
+          setCaption(next.join(", "), true);
+        });
         chip.appendChild(x);
         chipsEl.appendChild(chip);
       });
     }
 
-    function renderSuggest(tags) {
-      const freq = new Map();
-      images.forEach((img, i) => {
-        if (i === index) return;
-        parseTags(img.caption).forEach((t) => freq.set(t, (freq.get(t) || 0) + 1));
-      });
-      const have = new Set(tags);
-      const list = [...freq.entries()]
-        .filter(([t]) => !have.has(t) && t !== trigger)
-        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-        .slice(0, 8);
-      suggestEl.innerHTML = "";
-      if (!list.length) {
-        suggestEl.textContent = "Every tag in the dataset is already on this image.";
-        suggestEl.style.fontSize = "13px";
-        suggestEl.style.color = "#5e6e7e";
-        return;
-      }
-      suggestEl.style.color = "";
-      list.forEach(([tag]) => {
+    function norm(s) {
+      return s.trim().toLowerCase().replace(/\s+/g, "_").replace(/,/g, "");
+    }
+    function remember(tag) {
+      const clean = norm(tag);
+      if (!clean) return;
+      recent = [clean, ...recent.filter((t) => t !== clean)].slice(0, 20);
+    }
+    function tagButtons(el, tags, onPick) {
+      el.innerHTML = "";
+      el.style.color = "";
+      tags.forEach((tag) => {
         const b = document.createElement("button");
         b.type = "button";
         b.textContent = tag.replaceAll("_", " ");
-        b.addEventListener("click", () => {
-          const next = !trigger || tags.includes(trigger) ? [...tags, tag] : [trigger, ...tags, tag];
-          setCaption(next.join(", "), true);
-        });
-        suggestEl.appendChild(b);
+        b.addEventListener("click", () => onPick(tag));
+        el.appendChild(b);
       });
+    }
+    function renderSuggest(tags) {
+      const frequentBlock = document.getElementById("frequent-block");
+      frequentBlock.hidden = frequentCount === 0;
+      if (frequentCount > 0) {
+        const freq = new Map();
+        images.forEach((img) => parseTags(img.caption).forEach((t) => freq.set(t, (freq.get(t) || 0) + 1)));
+        const have = new Set(tags);
+        const list = [...freq.entries()]
+          .filter(([t]) => !have.has(t))
+          .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+          .slice(0, frequentCount)
+          .map(([t]) => t);
+        if (!list.length) {
+          suggestEl.textContent = "Every frequent tag is already on this image.";
+          suggestEl.style.fontSize = "13px";
+          suggestEl.style.color = "#5e6e7e";
+        } else {
+          tagButtons(suggestEl, list, (tag) => {
+            remember(tag);
+            setCaption([...tags, tag].join(", "), true);
+          });
+        }
+      }
+      const recentBlock = document.getElementById("recent-block");
+      recentBlock.hidden = recentCount === 0;
+      const recentEl = document.getElementById("recent");
+      const empty = document.getElementById("recent-empty");
+      if (recentCount > 0) {
+        const list = recent.slice(0, recentCount);
+        empty.hidden = recent.length > 0;
+        if (!list.length) recentEl.innerHTML = "";
+        else tagButtons(recentEl, list, (tag) => {
+          remember(tag);
+          if (tags.includes(tag)) return;
+          setCaption([...tags, tag].join(", "), true);
+        });
+      }
     }
 
     function setCaption(text, fromUi) {
@@ -736,15 +848,13 @@
       document.getElementById("stage-plate").innerHTML = plateSvg(img.plate);
       document.getElementById("file-name").textContent = img.file;
       document.getElementById("file-side").textContent = img.file.replace(/\.png$/, ".txt");
-      if (overwriteText) captionEl.value = img.caption;
+      document.getElementById("sidecar-field").hidden = !showSidecar;
+      if (overwriteText && document.activeElement !== captionEl) captionEl.value = img.caption;
       emptyNote.hidden = tags.length > 0;
+      document.getElementById("reorder-hint").hidden = tags.length < 2;
       emptyFile.textContent = img.file.replace(/\.png$/, ".txt");
       const captioned = images.filter((item) => item.caption.trim()).length;
       document.getElementById("progress").innerHTML = `<b>${captioned}</b> of ${images.length} captioned`;
-      const first = tags[0];
-      warnEl.textContent = tags.length && first !== trigger
-        ? "Trigger word is not the first tag."
-        : "";
       renderChips(tags);
       renderSuggest(tags);
       renderThumbs();
@@ -770,25 +880,45 @@
       select(next);
     }
 
-    document.getElementById("trigger").addEventListener("input", (e) => {
-      const next = e.target.value.trim().replace(/\s+/g, "_");
-      const prev = trigger;
-      trigger = next || prev;
-      images.forEach((img) => {
-        const tags = parseTags(img.caption);
-        if (!tags.length) return;
-        if (tags[0] === prev) tags[0] = trigger;
-        else if (!tags.includes(trigger)) tags.unshift(trigger);
-        img.caption = tags.join(", ");
-      });
-      paint();
-      markDirty();
+    captionEl.addEventListener("focus", () => {
+      captionEl.dataset.before = images[index].caption;
     });
-
     captionEl.addEventListener("input", () => {
       images[index].caption = captionEl.value;
       paint(false);
       markDirty();
+    });
+    captionEl.addEventListener("blur", () => {
+      const before = parseTags(captionEl.dataset.before || "");
+      const after = parseTags(captionEl.value);
+      const had = new Set(before);
+      after.forEach((tag) => { if (!had.has(tag)) remember(tag); });
+      paint(false);
+    });
+    function clampCount(value) {
+      const n = Math.round(Number(value));
+      if (!Number.isFinite(n)) return 0;
+      return Math.min(20, Math.max(0, n));
+    }
+    document.getElementById("open-settings").addEventListener("click", () => {
+      document.getElementById("set-sidecar").checked = showSidecar;
+      document.getElementById("set-frequent").value = String(frequentCount);
+      document.getElementById("set-recent").value = String(recentCount);
+      document.getElementById("settings").showModal();
+    });
+    document.getElementById("set-sidecar").addEventListener("change", (e) => {
+      showSidecar = e.target.checked;
+      paint(false);
+    });
+    document.getElementById("set-frequent").addEventListener("input", (e) => {
+      frequentCount = clampCount(e.target.value);
+      e.target.value = String(frequentCount);
+      paint(false);
+    });
+    document.getElementById("set-recent").addEventListener("input", (e) => {
+      recentCount = clampCount(e.target.value);
+      e.target.value = String(recentCount);
+      paint(false);
     });
 
     document.getElementById("copy-prev").addEventListener("click", () => {
@@ -796,7 +926,7 @@
       setCaption(images[index - 1].caption, true);
     });
     document.getElementById("clear-tags").addEventListener("click", () => {
-      setCaption(trigger, true);
+      setCaption("", true);
     });
     document.getElementById("prev").addEventListener("click", () => move(-1));
     document.getElementById("next").addEventListener("click", () => move(1));
@@ -813,7 +943,7 @@
     }
 
     document.addEventListener("keydown", (e) => {
-      const typing = e.target.matches("input, textarea");
+      const typing = e.target.matches("input, textarea") || e.target.closest(".chip");
       if (typing) return;
       if (e.key === "ArrowRight") { e.preventDefault(); move(1); }
       if (e.key === "ArrowLeft") { e.preventDefault(); move(-1); }

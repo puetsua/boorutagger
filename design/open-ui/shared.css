@@ -1,0 +1,624 @@
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--fg);
+  overflow: hidden;
+}
+button, input, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+button:focus-visible, input:focus-visible, textarea:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.app { height: 100%; display: flex; flex-direction: column; min-width: 0; }
+.top {
+  height: var(--top-h);
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px;
+  background: var(--top-bg);
+  color: var(--top-fg);
+  border-bottom: var(--top-border);
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: var(--brand-weight);
+  letter-spacing: var(--brand-track);
+  font-size: var(--brand-size);
+  flex-shrink: 0;
+}
+.mark {
+  width: var(--mark-size);
+  height: var(--mark-size);
+  border-radius: var(--mark-radius);
+  background: var(--accent);
+  color: var(--on-accent);
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 700;
+}
+.path {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--top-muted);
+  min-width: 0;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.count { flex-shrink: 0; font-variant-numeric: tabular-nums; font-size: 13px; color: var(--top-muted); }
+.count b { color: var(--top-fg); font-weight: 650; }
+.sys { font-size: 11px; color: var(--top-muted); letter-spacing: 0.04em; text-transform: uppercase; }
+
+.body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr) 360px;
+}
+
+.filters {
+  background: var(--side-bg);
+  color: var(--side-fg);
+  border-right: var(--side-border);
+  min-height: 0;
+  overflow: auto;
+  padding: var(--side-pad);
+}
+h2, .kicker {
+  margin: 0;
+  font-size: var(--label-size);
+  font-weight: var(--label-weight);
+  letter-spacing: var(--label-track);
+  text-transform: var(--label-case);
+  color: var(--muted);
+}
+.filters h2 { color: var(--side-fg); font-size: var(--side-title); text-transform: none; letter-spacing: 0; }
+.kicker { margin: 16px 0 6px; }
+.filters input, .sheet input[type="text"], .sheet textarea {
+  width: 100%;
+  border-radius: var(--field-radius);
+  padding: var(--field-pad);
+  font-family: var(--mono);
+  font-size: 12px;
+  background: var(--field-bg);
+  border: var(--field-border);
+  color: var(--fg);
+}
+.preset {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 6px;
+  padding: var(--row-pad);
+  border-radius: var(--row-radius);
+  border: var(--row-border);
+  background: var(--row-bg);
+  color: var(--side-fg);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+}
+.preset span { font-family: var(--mono); font-size: 12px; font-weight: 500; color: var(--muted); }
+.preset.active { background: var(--row-active-bg); color: var(--row-active-fg); border-color: var(--row-active-border); }
+.preset.active span { color: var(--row-active-muted); }
+.fchips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.fchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: var(--chip-border);
+  background: var(--chip-bg);
+  color: var(--chip-fg);
+  border-radius: var(--chip-radius);
+  padding: 3px 4px 3px 8px;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+.fchip button {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  padding: 0 4px;
+}
+.shown { margin-top: 16px; font-family: var(--mono); font-size: 12px; color: var(--muted); }
+
+.stage {
+  background: var(--stage-bg);
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.grid-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+}
+.grid-head p { margin: 0; color: var(--muted); font-size: 12px; }
+.grid-head .spacer { flex: 1; }
+.btn {
+  flex-shrink: 0;
+  border: var(--btn-border);
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+  border-radius: var(--btn-radius);
+  padding: var(--btn-pad);
+  font-size: 12px;
+  font-weight: 600;
+}
+.btn.primary { background: var(--accent); color: var(--on-accent); border-color: transparent; }
+.hint { flex: none; padding: 0 12px 8px; color: var(--muted); font-size: 11px; }
+.grid {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 4px 12px 16px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(108px, 1fr));
+  gap: var(--grid-gap);
+  align-content: start;
+}
+.cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px;
+  border: 0;
+  border-radius: var(--cell-radius);
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+.cell:hover { background: var(--cell-hover); }
+.cell.sel { box-shadow: var(--cell-sel); }
+.cell.cur { box-shadow: var(--cell-cur); }
+.thumb {
+  aspect-ratio: 3 / 4;
+  background: var(--thumb-bg);
+  overflow: hidden;
+  border-radius: var(--thumb-radius);
+}
+.thumb svg { width: 100%; height: 100%; display: block; }
+.fname {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fmeta { font-size: 10px; color: var(--muted); }
+
+.sheet {
+  background: var(--sheet-bg);
+  color: var(--sheet-fg);
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-left: var(--sheet-border);
+}
+.preview {
+  flex: none;
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  background: var(--preview-bg);
+}
+.preview .thumb { width: 72px; }
+.preview .name { font-family: var(--mono); font-size: 13px; }
+.preview .side { margin-top: 4px; font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.preview .who { margin-top: 6px; font-size: 13px; font-weight: 700; }
+.sheet-scroll { flex: 1; min-height: 0; overflow: auto; padding: 14px; }
+.lede { margin: 0 0 12px; font-size: 14px; line-height: 1.45; }
+.lede span { color: var(--muted); }
+.section { margin: 14px 0 8px; }
+.trow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding: var(--trow-pad);
+  border-bottom: var(--trow-border);
+}
+.tagname { font-family: var(--mono); font-size: 12px; }
+.quiet {
+  border: var(--btn-border);
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+  border-radius: var(--btn-radius);
+  padding: 4px 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.chips, .suggest { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  display: inline-flex;
+  align-items: center;
+  background: var(--chip-bg);
+  border: var(--chip-border);
+  color: var(--chip-fg);
+  border-radius: var(--chip-radius);
+  overflow: hidden;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.chip .tag { padding: 4px 8px; }
+.chip button { border: 0; background: transparent; color: var(--muted); padding: 0 7px; }
+.field { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.sheet textarea { min-height: 88px; line-height: 1.5; resize: vertical; font-weight: 400; }
+.suggest button {
+  border: var(--chip-border);
+  background: var(--suggest-bg);
+  color: var(--chip-fg);
+  border-radius: var(--chip-radius);
+  padding: 4px 8px;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.foot {
+  flex: none;
+  border-top: var(--trow-border);
+  padding: 10px 14px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.foot-row { display: flex; gap: 6px; align-items: center; }
+.foot-row input { flex: 1; min-width: 0; }
+.foot label { flex: none; font-size: 12px; font-weight: 600; color: var(--muted); }
+.note { font-size: 12px; color: var(--muted); }
+
+/* 1. Material 3 — Google, Apache-2.0 tokens */
+[data-theme="m3"] {
+  --font: Roboto, "Segoe UI", sans-serif;
+  --mono: Roboto, ui-monospace, monospace;
+  --bg: #fef7ff;
+  --fg: #1d1b20;
+  --muted: #49454f;
+  --accent: #6750a4;
+  --on-accent: #ffffff;
+  --focus: #6750a4;
+  --top-h: 64px;
+  --top-bg: #fef7ff;
+  --top-fg: #1d1b20;
+  --top-muted: #49454f;
+  --top-border: 0;
+  --brand-weight: 500;
+  --brand-track: 0;
+  --brand-size: 22px;
+  --mark-size: 40px;
+  --mark-radius: 12px;
+  --side-bg: #f7f2fa;
+  --side-fg: #1d1b20;
+  --side-border: 0;
+  --side-pad: 16px 12px;
+  --side-title: 16px;
+  --label-size: 11px;
+  --label-weight: 500;
+  --label-track: 0.04em;
+  --label-case: uppercase;
+  --field-bg: #e6e0e9;
+  --field-border: 0;
+  --field-radius: 4px 4px 0 0;
+  --field-pad: 10px 12px;
+  --row-pad: 10px 12px;
+  --row-radius: 28px;
+  --row-border: 0;
+  --row-bg: transparent;
+  --row-active-bg: #e8def8;
+  --row-active-fg: #1d192b;
+  --row-active-border: transparent;
+  --row-active-muted: #49454f;
+  --chip-bg: #e8def8;
+  --chip-fg: #1d192b;
+  --chip-border: 0;
+  --chip-radius: 8px;
+  --stage-bg: #f3edf7;
+  --grid-gap: 10px;
+  --cell-radius: 12px;
+  --cell-hover: #e6e0e9;
+  --cell-sel: inset 0 0 0 3px #e8def8;
+  --cell-cur: inset 0 0 0 3px #6750a4;
+  --thumb-bg: #e6e0e9;
+  --thumb-radius: 12px;
+  --sheet-bg: #fef7ff;
+  --sheet-fg: #1d1b20;
+  --sheet-border: 0;
+  --preview-bg: #f7f2fa;
+  --trow-pad: 10px 0;
+  --trow-border: 1px solid #cac4d0;
+  --btn-bg: #e8def8;
+  --btn-fg: #1d192b;
+  --btn-border: 0;
+  --btn-radius: 20px;
+  --btn-pad: 8px 16px;
+  --suggest-bg: #e6e0e9;
+}
+
+/* 2. Fluent 2 — Microsoft, MIT */
+[data-theme="fluent"] {
+  --font: "Segoe UI Variable", "Segoe UI", sans-serif;
+  --mono: "Cascadia Mono", Consolas, ui-monospace, monospace;
+  --bg: #f5f5f5;
+  --fg: #242424;
+  --muted: #616161;
+  --accent: #0f6cbd;
+  --on-accent: #ffffff;
+  --focus: #0f6cbd;
+  --top-h: 48px;
+  --top-bg: #ffffff;
+  --top-fg: #242424;
+  --top-muted: #616161;
+  --top-border: 1px solid #e0e0e0;
+  --brand-weight: 600;
+  --brand-track: 0;
+  --brand-size: 14px;
+  --mark-size: 24px;
+  --mark-radius: 4px;
+  --side-bg: #fafafa;
+  --side-fg: #242424;
+  --side-border: 1px solid #e0e0e0;
+  --side-pad: 12px;
+  --side-title: 14px;
+  --label-size: 12px;
+  --label-weight: 600;
+  --label-track: 0;
+  --label-case: none;
+  --field-bg: #ffffff;
+  --field-border: 1px solid #d1d1d1;
+  --field-radius: 4px;
+  --field-pad: 6px 8px;
+  --row-pad: 7px 8px;
+  --row-radius: 4px;
+  --row-border: 1px solid transparent;
+  --row-bg: transparent;
+  --row-active-bg: #ebf3fc;
+  --row-active-fg: #0f6cbd;
+  --row-active-border: transparent;
+  --row-active-muted: #0f6cbd;
+  --chip-bg: #f0f0f0;
+  --chip-fg: #242424;
+  --chip-border: 1px solid #d1d1d1;
+  --chip-radius: 4px;
+  --stage-bg: #f5f5f5;
+  --grid-gap: 8px;
+  --cell-radius: 4px;
+  --cell-hover: #ffffff;
+  --cell-sel: inset 0 0 0 2px #b4d6fa;
+  --cell-cur: inset 0 0 0 2px #0f6cbd;
+  --thumb-bg: #e6e6e6;
+  --thumb-radius: 4px;
+  --sheet-bg: #ffffff;
+  --sheet-fg: #242424;
+  --sheet-border: 1px solid #e0e0e0;
+  --preview-bg: #fafafa;
+  --trow-pad: 8px 0;
+  --trow-border: 1px solid #e0e0e0;
+  --btn-bg: #ffffff;
+  --btn-fg: #242424;
+  --btn-border: 1px solid #d1d1d1;
+  --btn-radius: 4px;
+  --btn-pad: 5px 10px;
+  --suggest-bg: #ffffff;
+}
+
+/* 3. Carbon — IBM, Apache-2.0 */
+[data-theme="carbon"] {
+  --font: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+  --bg: #f4f4f4;
+  --fg: #161616;
+  --muted: #525252;
+  --accent: #0f62fe;
+  --on-accent: #ffffff;
+  --focus: #0f62fe;
+  --top-h: 48px;
+  --top-bg: #161616;
+  --top-fg: #ffffff;
+  --top-muted: #c6c6c6;
+  --top-border: 0;
+  --brand-weight: 600;
+  --brand-track: 0;
+  --brand-size: 14px;
+  --mark-size: 20px;
+  --mark-radius: 0;
+  --side-bg: #ffffff;
+  --side-fg: #161616;
+  --side-border: 1px solid #e0e0e0;
+  --side-pad: 16px 12px;
+  --side-title: 14px;
+  --label-size: 12px;
+  --label-weight: 400;
+  --label-track: 0.16em;
+  --label-case: uppercase;
+  --field-bg: #f4f4f4;
+  --field-border: 0;
+  --field-radius: 0;
+  --field-pad: 10px 12px;
+  --row-pad: 10px 12px;
+  --row-radius: 0;
+  --row-border: 0;
+  --row-bg: transparent;
+  --row-active-bg: #e8e8e8;
+  --row-active-fg: #161616;
+  --row-active-border: transparent;
+  --row-active-muted: #525252;
+  --chip-bg: #e0e0e0;
+  --chip-fg: #161616;
+  --chip-border: 0;
+  --chip-radius: 0;
+  --stage-bg: #f4f4f4;
+  --grid-gap: 4px;
+  --cell-radius: 0;
+  --cell-hover: #e8e8e8;
+  --cell-sel: inset 0 0 0 2px #78a9ff;
+  --cell-cur: inset 0 0 0 2px #0f62fe;
+  --thumb-bg: #e0e0e0;
+  --thumb-radius: 0;
+  --sheet-bg: #ffffff;
+  --sheet-fg: #161616;
+  --sheet-border: 1px solid #e0e0e0;
+  --preview-bg: #f4f4f4;
+  --trow-pad: 8px 0;
+  --trow-border: 1px solid #e0e0e0;
+  --btn-bg: #0f62fe;
+  --btn-fg: #ffffff;
+  --btn-border: 0;
+  --btn-radius: 0;
+  --btn-pad: 8px 12px;
+  --suggest-bg: #f4f4f4;
+}
+[data-theme="carbon"] .btn:not(.primary) {
+  background: #393939;
+  color: #ffffff;
+}
+
+/* 4. Spectrum 2 — Adobe, Apache-2.0 */
+[data-theme="spectrum"] {
+  --font: "Source Sans 3", "adobe-clean", "Segoe UI", sans-serif;
+  --mono: "Source Code Pro", ui-monospace, monospace;
+  --bg: #f8f8f8;
+  --fg: #222222;
+  --muted: #6d6d6d;
+  --accent: #0265dc;
+  --on-accent: #ffffff;
+  --focus: #0265dc;
+  --top-h: 48px;
+  --top-bg: #ffffff;
+  --top-fg: #222222;
+  --top-muted: #6d6d6d;
+  --top-border: 1px solid #e6e6e6;
+  --brand-weight: 700;
+  --brand-track: -0.01em;
+  --brand-size: 16px;
+  --mark-size: 28px;
+  --mark-radius: 8px;
+  --side-bg: #ffffff;
+  --side-fg: #222222;
+  --side-border: 1px solid #e6e6e6;
+  --side-pad: 16px 14px;
+  --side-title: 16px;
+  --label-size: 11px;
+  --label-weight: 700;
+  --label-track: 0.06em;
+  --label-case: uppercase;
+  --field-bg: #ffffff;
+  --field-border: 1px solid #c6c6c6;
+  --field-radius: 8px;
+  --field-pad: 8px 10px;
+  --row-pad: 8px 10px;
+  --row-radius: 8px;
+  --row-border: 1px solid transparent;
+  --row-bg: transparent;
+  --row-active-bg: #e0f2ff;
+  --row-active-fg: #013c9d;
+  --row-active-border: transparent;
+  --row-active-muted: #0265dc;
+  --chip-bg: #e9e9e9;
+  --chip-fg: #222222;
+  --chip-border: 0;
+  --chip-radius: 6px;
+  --stage-bg: #f3f3f3;
+  --grid-gap: 10px;
+  --cell-radius: 8px;
+  --cell-hover: #ffffff;
+  --cell-sel: inset 0 0 0 2px #8ec8f6;
+  --cell-cur: inset 0 0 0 2px #0265dc;
+  --thumb-bg: #e9e9e9;
+  --thumb-radius: 8px;
+  --sheet-bg: #ffffff;
+  --sheet-fg: #222222;
+  --sheet-border: 1px solid #e6e6e6;
+  --preview-bg: #f8f8f8;
+  --trow-pad: 9px 0;
+  --trow-border: 1px solid #e6e6e6;
+  --btn-bg: #ffffff;
+  --btn-fg: #222222;
+  --btn-border: 1px solid #c6c6c6;
+  --btn-radius: 8px;
+  --btn-pad: 6px 12px;
+  --suggest-bg: #f8f8f8;
+}
+
+/* 5. Adwaita — GNOME, LGPL-2.1 */
+[data-theme="adwaita"] {
+  --font: Inter, Cantarell, "Segoe UI", sans-serif;
+  --mono: "Adwaita Mono", "Liberation Mono", ui-monospace, monospace;
+  --bg: #fafafa;
+  --fg: #1c1c1c;
+  --muted: #5e5e5e;
+  --accent: #3584e4;
+  --on-accent: #ffffff;
+  --focus: #3584e4;
+  --top-h: 46px;
+  --top-bg: #ffffff;
+  --top-fg: #1c1c1c;
+  --top-muted: #5e5e5e;
+  --top-border: 1px solid #d9d9d9;
+  --brand-weight: 700;
+  --brand-track: 0;
+  --brand-size: 15px;
+  --mark-size: 22px;
+  --mark-radius: 999px;
+  --side-bg: #ebebeb;
+  --side-fg: #1c1c1c;
+  --side-border: 1px solid #d4d4d4;
+  --side-pad: 12px;
+  --side-title: 13px;
+  --label-size: 11px;
+  --label-weight: 700;
+  --label-track: 0.02em;
+  --label-case: none;
+  --field-bg: #ffffff;
+  --field-border: 1px solid #cfcfcf;
+  --field-radius: 9px;
+  --field-pad: 7px 10px;
+  --row-pad: 8px 10px;
+  --row-radius: 9px;
+  --row-border: 0;
+  --row-bg: transparent;
+  --row-active-bg: #3584e4;
+  --row-active-fg: #ffffff;
+  --row-active-border: transparent;
+  --row-active-muted: #d6e8fa;
+  --chip-bg: #ffffff;
+  --chip-fg: #1c1c1c;
+  --chip-border: 1px solid #cfcfcf;
+  --chip-radius: 9px;
+  --stage-bg: #fafafa;
+  --grid-gap: 8px;
+  --cell-radius: 9px;
+  --cell-hover: #ffffff;
+  --cell-sel: inset 0 0 0 2px #99c1f1;
+  --cell-cur: inset 0 0 0 2px #3584e4;
+  --thumb-bg: #deddda;
+  --thumb-radius: 9px;
+  --sheet-bg: #ffffff;
+  --sheet-fg: #1c1c1c;
+  --sheet-border: 1px solid #d4d4d4;
+  --preview-bg: #f6f5f4;
+  --trow-pad: 8px 0;
+  --trow-border: 1px solid #e6e6e6;
+  --btn-bg: #ffffff;
+  --btn-fg: #1c1c1c;
+  --btn-border: 1px solid #cfcfcf;
+  --btn-radius: 9px;
+  --btn-pad: 5px 10px;
+  --suggest-bg: #f6f5f4;
+}
