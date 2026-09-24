@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>BooruTagger — caption bench</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Schibsted+Grotesk:ital,wght@0,500;0,600;0,700;1,500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bench: #1e2836;
+      --bench-2: #283448;
+      --tray: #121820;
+      --sheet: #f3f6f7;
+      --sheet-2: #e7eef0;
+      --paper: #fbfcfc;
+      --ink: #1a2330;
+      --muted: #5e6e7e;
+      --faint: #8b9aaa;
+      --line: #d3dee3;
+      --line-strong: #b7c6ce;
+      --trigger: #0e7490;
+      --character: #1b7a43;
+      --copyright: #7a3e9d;
+      --artist: #c4492c;
+      --general: #3e5c86;
+      --meta: #a56b12;
+      --focus: #0e7490;
+      --sans: "Schibsted Grotesk", "Segoe UI", sans-serif;
+      --mono: "IBM Plex Mono", "Cascadia Mono", ui-monospace, monospace;
+      color-scheme: dark;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      font-family: var(--sans);
+      background: var(--bench);
+      color: var(--ink);
+      overflow: hidden;
+    }
+    button, input, textarea { font: inherit; color: inherit; }
+    button { cursor: pointer; }
+    button:focus-visible, input:focus-visible, textarea:focus-visible {
+      outline: 2px solid var(--focus);
+      outline-offset: 2px;
+    }
+    ::selection { background: #c5e4ec; }
+
+    .app {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    .top {
+      height: 52px;
+      flex: none;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 0 14px 0 16px;
+      background: var(--bench);
+      color: #e7eef2;
+      border-bottom: 1px solid #121820;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      font-size: 16px;
+    }
+    .bars { display: flex; gap: 2px; height: 16px; }
+    .bars i { width: 3px; height: 16px; display: block; }
+    .path {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: #b7c5d0;
+      background: transparent;
+      border: 1px solid transparent;
+      padding: 6px 8px;
+      min-width: 0;
+      flex: 1;
+      text-align: left;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .path:hover { border-color: #3c4d60; background: var(--bench-2); }
+    .ghost, .count { flex-shrink: 0; }
+    .ghost, .quiet, .nav {
+      border: 1px solid #3c4d60;
+      background: transparent;
+      color: #e7eef2;
+      border-radius: 3px;
+      padding: 6px 10px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .ghost:hover, .nav:hover { background: var(--bench-2); }
+    .count {
+      font-variant-numeric: tabular-nums;
+      font-size: 13px;
+      color: #d5e0e6;
+      white-space: nowrap;
+    }
+    .count b { font-weight: 700; }
+    .win {
+      display: flex;
+      margin-left: 8px;
+    }
+    .win button {
+      width: 40px;
+      height: 32px;
+      border: 0;
+      background: transparent;
+      color: #c5d0d8;
+      font-size: 13px;
+    }
+    .win button:hover { background: var(--bench-2); }
+    .win .close:hover { background: #8d3328; color: white; }
+
+    .body {
+      flex: 1;
+      min-height: 0;
+      display: grid;
+      grid-template-columns: 196px minmax(0, 1fr) 400px;
+    }
+
+    .strip {
+      background: var(--bench);
+      color: #d5e0e6;
+      border-right: 1px solid #121820;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+    .filters {
+      display: flex;
+      gap: 6px;
+      padding: 12px 12px 8px;
+    }
+    .filters button {
+      flex: 1;
+      border: 1px solid #3c4d60;
+      background: transparent;
+      color: #c5d2db;
+      border-radius: 3px;
+      padding: 6px 4px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .filters button[aria-pressed="true"] {
+      background: var(--sheet);
+      color: var(--ink);
+      border-color: var(--sheet);
+    }
+    .thumbs {
+      overflow: auto;
+      padding: 8px 12px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .thumb {
+      display: grid;
+      grid-template-columns: 54px 1fr;
+      gap: 8px;
+      align-items: center;
+      text-align: left;
+      padding: 6px;
+      border-radius: 3px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: inherit;
+    }
+    .thumb:hover { background: var(--bench-2); }
+    .thumb[aria-current="true"] {
+      border-color: #d7e2e8;
+      background: #243246;
+    }
+    .plate {
+      width: 54px;
+      height: 72px;
+      background: #0e141c;
+      overflow: hidden;
+      position: relative;
+    }
+    .plate svg { width: 100%; height: 100%; display: block; }
+    .thumb-meta { min-width: 0; }
+    .thumb-meta strong {
+      display: block;
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .flag {
+      display: block;
+      margin-top: 4px;
+      font-size: 11px;
+      letter-spacing: 0.01em;
+      color: #8fa0ad;
+    }
+    .flag.empty { color: #e2b15a; }
+
+    .stage {
+      background: var(--tray);
+      color: #d5e0e6;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      min-height: 0;
+    }
+    .frame {
+      flex: 1;
+      min-height: 0;
+      display: grid;
+      place-items: center;
+      padding: 28px 28px 8px;
+    }
+    .frame-inner {
+      height: 100%;
+      max-height: 100%;
+      aspect-ratio: 3 / 4;
+      max-width: 100%;
+      background: #0c1117;
+      box-shadow: 0 0 0 1px #2a3848, 0 24px 40px rgba(0, 0, 0, 0.28);
+    }
+    .frame-inner svg { width: 100%; height: 100%; display: block; }
+    .stage-foot {
+      flex: none;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 18px 16px;
+    }
+    .fileid { min-width: 0; flex: 1; }
+    .fileid .name {
+      font-family: var(--mono);
+      font-size: 13px;
+      color: #f4f7f8;
+    }
+    .fileid .side {
+      margin-top: 3px;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: #8fa0ad;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .nav { min-width: 92px; }
+    .keys {
+      font-size: 11px;
+      color: #7e909d;
+      letter-spacing: 0.01em;
+    }
+
+    .sheet {
+      background: var(--sheet);
+      color: var(--ink);
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      min-width: 0;
+      border-left: 1px solid #121820;
+    }
+    .sheet-scroll {
+      overflow: auto;
+      padding: 18px 18px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .sheet h2 {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--ink);
+    }
+    label.field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+    }
+    input[type="text"], textarea {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 3px;
+      color: var(--ink);
+      padding: 8px 10px;
+    }
+    input[type="text"] {
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 500;
+    }
+    textarea {
+      font-family: var(--mono);
+      font-size: 13px;
+      line-height: 1.55;
+      min-height: 148px;
+      resize: vertical;
+      font-weight: 400;
+    }
+    .warn {
+      font-weight: 500;
+      color: var(--artist);
+      min-height: 1.2em;
+    }
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      min-height: 28px;
+    }
+    .chip {
+      display: inline-flex;
+      align-items: stretch;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 3px;
+      overflow: hidden;
+      max-width: 100%;
+    }
+    .chip .swatch { width: 6px; flex: none; }
+    .chip .tag {
+      font-family: var(--mono);
+      font-size: 12px;
+      padding: 4px 6px 4px 8px;
+      line-height: 1.3;
+    }
+    .chip button {
+      border: 0;
+      background: transparent;
+      color: var(--faint);
+      padding: 0 7px 0 2px;
+      font-size: 14px;
+      line-height: 1;
+    }
+    .chip button:hover { color: var(--ink); }
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 12px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .legend li { display: flex; align-items: center; gap: 6px; }
+    .legend i { width: 10px; height: 10px; display: block; }
+    .suggest {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .suggest button, .quiet {
+      border: 1px solid var(--line-strong);
+      background: transparent;
+      color: var(--ink);
+      border-radius: 3px;
+      padding: 5px 8px;
+      font-family: var(--mono);
+      font-size: 12px;
+    }
+    .suggest button:hover, .quiet:hover { background: var(--sheet-2); }
+    .row-actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .status {
+      margin-left: auto;
+      font-size: 12px;
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+    .status.dirty { color: var(--meta); }
+    .empty-note {
+      margin: 0;
+      font-size: 14px;
+      line-height: 1.45;
+      color: var(--ink);
+    }
+    .empty-note span { color: var(--muted); }
+
+    @media (max-width: 1080px) {
+      body { overflow: auto; }
+      .app { height: auto; min-height: 100%; }
+      .body {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto minmax(420px, 70vh) auto;
+      }
+      .thumbs { flex-direction: row; overflow-x: auto; }
+      .thumb { width: 168px; flex: none; }
+      .strip { border-right: 0; border-bottom: 1px solid #121820; }
+      .sheet { border-left: 0; border-top: 1px solid #121820; }
+      .path { display: none; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      * { transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="top">
+      <div class="brand">
+        <span class="bars" aria-hidden="true">
+          <i style="background:#0e7490"></i>
+          <i style="background:#1b7a43"></i>
+          <i style="background:#7a3e9d"></i>
+          <i style="background:#c4492c"></i>
+          <i style="background:#3e5c86"></i>
+          <i style="background:#a56b12"></i>
+        </span>
+        BooruTagger
+      </div>
+      <button class="path" id="open-folder" type="button">D:\datasets\lio-vesper</button>
+      <button class="ghost" id="open-folder-2" type="button">Open folder</button>
+      <div class="count" id="progress">5 of 6 captioned</div>
+    </header>
+    <div class="body">
+      <aside class="strip">
+        <div class="filters" role="group" aria-label="Filter images">
+          <button type="button" id="filter-all" aria-pressed="true">All</button>
+          <button type="button" id="filter-empty" aria-pressed="false">Needs caption</button>
+        </div>
+        <div class="thumbs" id="thumbs"></div>
+      </aside>
+      <section class="stage" aria-label="Image">
+        <div class="frame">
+          <div class="frame-inner" id="stage-plate"></div>
+        </div>
+        <div class="stage-foot">
+          <button class="nav" id="prev" type="button">Previous</button>
+          <div class="fileid">
+            <div class="name" id="file-name">lio_01.png</div>
+            <div class="side" id="file-side">lio_01.txt</div>
+          </div>
+          <div class="keys">← → move</div>
+          <button class="nav" id="next" type="button">Next</button>
+        </div>
+      </section>
+      <aside class="sheet" aria-label="Caption">
+        <div class="sheet-scroll">
+          <h2>Caption</h2>
+          <p class="empty-note" id="empty-note" hidden>
+            No caption yet. <span id="empty-file">lio_04.txt</span> is created when you add the first tag.
+          </p>
+          <label class="field">
+            Trigger word
+            <input id="trigger" type="text" value="lio_vesper" spellcheck="false" autocomplete="off" />
+          </label>
+          <p class="warn" id="warn" role="status"></p>
+          <div class="chips" id="chips" aria-label="Tags"></div>
+          <ul class="legend" aria-label="Tag colors">
+            <li><i style="background:#0e7490"></i>trigger</li>
+            <li><i style="background:#1b7a43"></i>character</li>
+            <li><i style="background:#7a3e9d"></i>copyright</li>
+            <li><i style="background:#c4492c"></i>artist</li>
+            <li><i style="background:#3e5c86"></i>general</li>
+            <li><i style="background:#a56b12"></i>meta</li>
+          </ul>
+          <label class="field">
+            Sidecar text
+            <textarea id="caption" spellcheck="false" placeholder="comma-separated tags, trigger word first"></textarea>
+          </label>
+          <div>
+            <h2 style="margin-bottom:8px">Used in this dataset</h2>
+            <div class="suggest" id="suggest"></div>
+          </div>
+          <div class="row-actions">
+            <button class="quiet" id="copy-prev" type="button">Copy previous</button>
+            <button class="quiet" id="clear-tags" type="button">Clear tags</button>
+            <div class="status" id="status">Saved</div>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+  <script>
+    const COLORS = {
+      trigger: "#0e7490",
+      character: "#1b7a43",
+      copyright: "#7a3e9d",
+      artist: "#c4492c",
+      general: "#3e5c86",
+      meta: "#a56b12"
+    };
+    const KNOWN = {
+      lio_vesper: "trigger",
+      "1boy": "character",
+      vesper_line: "copyright",
+      keita_study: "artist",
+      simple_background: "meta",
+      white_background: "meta",
+      grey_background: "meta",
+      outdoors: "meta",
+      night: "meta",
+      from_behind: "meta",
+      upper_body: "meta",
+      portrait: "meta",
+      full_body: "meta"
+    };
+
+    const images = [
+      { file: "lio_01.png", plate: "bust", caption: "lio_vesper, 1boy, short_hair, dark_blue_hair, amber_eyes, red_coat, white_shirt, looking_at_viewer, upper_body, grey_background, keita_study" },
+      { file: "lio_02.png", plate: "stand", caption: "lio_vesper, 1boy, short_hair, dark_blue_hair, red_coat, white_shirt, black_pants, standing, full_body, white_background" },
+      { file: "lio_03.png", plate: "sit", caption: "lio_vesper, 1boy, short_hair, red_coat, sitting, looking_to_the_side, crossed_legs, simple_background" },
+      { file: "lio_04.png", plate: "face", caption: "" },
+      { file: "lio_05.png", plate: "back", caption: "lio_vesper, 1boy, from_behind, red_coat, short_hair, grey_background" },
+      { file: "lio_06.png", plate: "street", caption: "lio_vesper, 1boy, red_coat, standing, outdoors, night, street, vesper_line, looking_at_viewer" }
+    ];
+
+    let trigger = "lio_vesper";
+    let index = 0;
+    let filter = "all";
+    let dirty = false;
+    let saveTimer = 0;
+
+    const thumbsEl = document.getElementById("thumbs");
+    const captionEl = document.getElementById("caption");
+    const chipsEl = document.getElementById("chips");
+    const suggestEl = document.getElementById("suggest");
+    const statusEl = document.getElementById("status");
+    const warnEl = document.getElementById("warn");
+    const emptyNote = document.getElementById("empty-note");
+    const emptyFile = document.getElementById("empty-file");
+
+    function catOf(tag) {
+      if (tag === trigger) return "trigger";
+      return KNOWN[tag] || "general";
+    }
+    function parseTags(text) {
+      return text.split(",").map((t) => t.trim()).filter(Boolean);
+    }
+    function visibleIndexes() {
+      return images.map((_, i) => i).filter((i) => filter === "all" || !images[i].caption.trim());
+    }
+    function plateSvg(kind) {
+      const skin = "#f0d2bf";
+      const hair = "#1c2a44";
+      const coat = "#c4492c";
+      const coatDark = "#9a3824";
+      const shirt = "#f4f1ea";
+      const eye = "#c9852a";
+      const lip = "#a87868";
+      const bg = {
+        bust: "#c5ced6",
+        stand: "#efeae3",
+        sit: "#d7e0da",
+        face: "#e4d3c2",
+        back: "#b7c0c8",
+        street: "#1b2836"
+      }[kind];
+      const face = (x, y, s, turn) => `
+        <g transform="translate(${x} ${y}) scale(${s})">
+          <path d="M-28 36 H28 V58 H-28Z" fill="${skin}"/>
+          <path d="M-36 4 C-38 48 -20 66 0 68 C20 66 38 48 36 4 C30 -34 16 -46 0 -46 C-16 -46 -30 -34 -36 4Z" fill="${skin}"/>
+          <path d="M-42 -2 C-48 -42 -16 -58 2 -54 C22 -58 46 -38 40 2 C30 -20 14 -8 4 -16 C-2 -4 -12 -6 -22 -14 C-30 -2 -36 -8 -42 -2Z" fill="${hair}"/>
+          <path d="M${turn < 0 ? -8 : -18} -8 C${turn < 0 ? 6 : -4} -22 ${turn < 0 ? 22 : 12} -18 ${turn < 0 ? 24 : 20} -6 C${turn < 0 ? 10 : 4} -12 ${turn < 0 ? 0 : -8} -10 ${turn < 0 ? -8 : -18} -8Z" fill="${hair}"/>
+          <ellipse cx="${-12 + turn}" cy="8" rx="3.3" ry="3.8" fill="${eye}"/>
+          <ellipse cx="${12 + turn}" cy="8" rx="3.3" ry="3.8" fill="${eye}"/>
+          <path d="M${-2 + turn} 18 L${2 + turn} 24" stroke="${lip}" stroke-width="1.3" fill="none"/>
+          <path d="M${-6 + turn} 32 Q${turn} 36 ${6 + turn} 32" fill="none" stroke="${lip}" stroke-width="1.3"/>
+        </g>`;
+      const scenes = {
+        bust: `
+          <rect width="360" height="480" fill="${bg}"/>
+          <path d="M0 268 C70 214 120 236 180 232 C250 236 300 214 360 268 V480 H0Z" fill="${coat}"/>
+          <path d="M158 246 L180 348 L202 246 Z" fill="${shirt}"/>
+          <path d="M166 250 L180 300 L194 250" fill="none" stroke="${coatDark}" stroke-width="3"/>
+          ${face(180, 168, 1.55, 0)}`,
+        stand: `
+          <rect width="360" height="480" fill="${bg}"/>
+          <path d="M128 214 H232 L214 340 H198 L186 468 H174 L162 340 H146Z" fill="${coat}"/>
+          <path d="M162 218 H198 L190 268 H170Z" fill="${shirt}"/>
+          <path d="M148 338 H174 L164 470 H140Z" fill="#243044"/>
+          <path d="M186 338 H212 L222 470 H196Z" fill="#243044"/>
+          <path d="M132 456 H170 V470 H132Z" fill="#1a120e"/>
+          <path d="M190 456 H230 V470 H190Z" fill="#1a120e"/>
+          ${face(180, 128, 1.15, 0)}`,
+        sit: `
+          <rect width="360" height="480" fill="${bg}"/>
+          <rect x="70" y="392" width="220" height="22" fill="#8b9692"/>
+          <path d="M92 230 H250 L276 348 H210 L268 430 H96 L150 348 H78Z" fill="${coat}"/>
+          <path d="M158 236 H206 L196 292 H168Z" fill="${shirt}"/>
+          <path d="M96 430 H150 V446 H88Z" fill="#243044"/>
+          <path d="M210 430 H276 V446 H218Z" fill="#243044"/>
+          ${face(176, 132, 1.2, -6)}`,
+        face: `
+          <rect width="360" height="480" fill="${bg}"/>
+          <path d="M40 360 H320 L300 480 H60Z" fill="${coat}"/>
+          <path d="M150 360 H210 L196 430 H164Z" fill="${shirt}"/>
+          ${face(180, 188, 2.15, 0)}`,
+        back: `
+          <rect width="360" height="480" fill="${bg}"/>
+          <path d="M78 250 H282 L258 480 H102Z" fill="${coat}"/>
+          <path d="M156 252 H204 L188 330 H172Z" fill="${coatDark}"/>
+          <g transform="translate(180 150) scale(1.45)">
+            <path d="M-30 28 H30 V70 H-30Z" fill="${skin}"/>
+            <path d="M-34 20 C-28 64 -14 76 0 76 C14 76 28 64 34 20 C26 -6 14 -16 0 -16 C-14 -16 -26 -6 -34 20Z" fill="${skin}"/>
+            <path d="M-46 -8 C-40 -58 -8 -70 0 -68 C10 -70 42 -56 46 -6 C24 -34 8 -18 0 -26 C-10 -16 -26 -34 -46 -8Z" fill="${hair}"/>
+            <path d="M-6 18 H6 V36 H-6Z" fill="#e4b8a6"/>
+          </g>`,
+        street: `
+          <rect width="360" height="480" fill="${bg}"/>
+          <rect x="0" y="372" width="360" height="108" fill="#121820"/>
+          <rect x="28" y="78" width="86" height="120" fill="#243246"/>
+          <rect x="40" y="92" width="24" height="32" fill="#e2b15a" opacity=".45"/>
+          <rect x="70" y="92" width="24" height="32" fill="#243246" stroke="#33485a"/>
+          <rect x="268" y="40" width="8" height="332" fill="#314252"/>
+          <circle cx="272" cy="48" r="18" fill="#e2b15a"/>
+          <path d="M132 214 H236 L220 470 H148Z" fill="${coat}"/>
+          <path d="M166 220 H200 L192 270 H174Z" fill="${shirt}"/>
+          <path d="M150 470 H176 V480 H146Z" fill="#1a120e"/>
+          <path d="M196 470 H224 V480 H192Z" fill="#1a120e"/>
+          ${face(184, 128, 1.12, 0)}`
+      };
+      return `<svg viewBox="0 0 360 480" role="img" aria-label="Sample study">${scenes[kind]}</svg>`;
+    }
+
+    function renderThumbs() {
+      const vis = visibleIndexes();
+      thumbsEl.innerHTML = "";
+      vis.forEach((i) => {
+        const img = images[i];
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "thumb";
+        if (i === index) btn.setAttribute("aria-current", "true");
+        const empty = !img.caption.trim();
+        btn.innerHTML = `
+          <span class="plate">${plateSvg(img.plate)}</span>
+          <span class="thumb-meta">
+            <strong>${img.file}</strong>
+            <span class="flag ${empty ? "empty" : ""}">${empty ? "Needs caption" : parseTags(img.caption).length + " tags"}</span>
+          </span>`;
+        btn.addEventListener("click", () => select(i));
+        thumbsEl.appendChild(btn);
+      });
+    }
+
+    function renderChips(tags) {
+      chipsEl.innerHTML = "";
+      tags.forEach((tag, n) => {
+        const cat = catOf(tag);
+        const chip = document.createElement("span");
+        chip.className = "chip";
+        chip.innerHTML = `<i class="swatch" style="background:${COLORS[cat]}"></i><span class="tag">${tag.replaceAll("_", " ")}</span>`;
+        const x = document.createElement("button");
+        x.type = "button";
+        x.setAttribute("aria-label", `Remove ${tag}`);
+        x.textContent = "×";
+        x.addEventListener("click", () => {
+          const next = tags.filter((_, i) => i !== n);
+          setCaption(next.join(", "), true);
+        });
+        chip.appendChild(x);
+        chipsEl.appendChild(chip);
+      });
+    }
+
+    function renderSuggest(tags) {
+      const freq = new Map();
+      images.forEach((img, i) => {
+        if (i === index) return;
+        parseTags(img.caption).forEach((t) => freq.set(t, (freq.get(t) || 0) + 1));
+      });
+      const have = new Set(tags);
+      const list = [...freq.entries()]
+        .filter(([t]) => !have.has(t) && t !== trigger)
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+        .slice(0, 8);
+      suggestEl.innerHTML = "";
+      if (!list.length) {
+        suggestEl.textContent = "Every tag in the dataset is already on this image.";
+        suggestEl.style.fontSize = "13px";
+        suggestEl.style.color = "#5e6e7e";
+        return;
+      }
+      suggestEl.style.color = "";
+      list.forEach(([tag]) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.textContent = tag.replaceAll("_", " ");
+        b.addEventListener("click", () => {
+          const next = !trigger || tags.includes(trigger) ? [...tags, tag] : [trigger, ...tags, tag];
+          setCaption(next.join(", "), true);
+        });
+        suggestEl.appendChild(b);
+      });
+    }
+
+    function setCaption(text, fromUi) {
+      let next = text;
+      if (fromUi) {
+        const tags = parseTags(text);
+        next = tags.join(", ");
+      }
+      images[index].caption = next;
+      paint(fromUi);
+      markDirty();
+    }
+
+    function markDirty() {
+      dirty = true;
+      statusEl.textContent = "Unsaved";
+      statusEl.classList.add("dirty");
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(() => {
+        dirty = false;
+        statusEl.textContent = "Saved";
+        statusEl.classList.remove("dirty");
+      }, 500);
+    }
+
+    function paint(overwriteText = true) {
+      const img = images[index];
+      const tags = parseTags(img.caption);
+      document.getElementById("stage-plate").innerHTML = plateSvg(img.plate);
+      document.getElementById("file-name").textContent = img.file;
+      document.getElementById("file-side").textContent = img.file.replace(/\.png$/, ".txt");
+      if (overwriteText) captionEl.value = img.caption;
+      emptyNote.hidden = tags.length > 0;
+      emptyFile.textContent = img.file.replace(/\.png$/, ".txt");
+      const captioned = images.filter((item) => item.caption.trim()).length;
+      document.getElementById("progress").innerHTML = `<b>${captioned}</b> of ${images.length} captioned`;
+      const first = tags[0];
+      warnEl.textContent = tags.length && first !== trigger
+        ? "Trigger word is not the first tag."
+        : "";
+      renderChips(tags);
+      renderSuggest(tags);
+      renderThumbs();
+      document.getElementById("copy-prev").disabled = index === 0;
+      if (!dirty) {
+        statusEl.textContent = img.caption.trim() ? "Saved" : "Empty";
+        statusEl.classList.remove("dirty");
+      }
+    }
+
+    function select(i) {
+      index = i;
+      dirty = false;
+      statusEl.textContent = images[i].caption.trim() ? "Saved" : "Empty";
+      statusEl.classList.remove("dirty");
+      paint();
+    }
+
+    function move(step) {
+      const vis = visibleIndexes();
+      const pos = vis.indexOf(index);
+      const next = vis[(pos + step + vis.length) % vis.length];
+      select(next);
+    }
+
+    document.getElementById("trigger").addEventListener("input", (e) => {
+      const next = e.target.value.trim().replace(/\s+/g, "_");
+      const prev = trigger;
+      trigger = next || prev;
+      images.forEach((img) => {
+        const tags = parseTags(img.caption);
+        if (!tags.length) return;
+        if (tags[0] === prev) tags[0] = trigger;
+        else if (!tags.includes(trigger)) tags.unshift(trigger);
+        img.caption = tags.join(", ");
+      });
+      paint();
+      markDirty();
+    });
+
+    captionEl.addEventListener("input", () => {
+      images[index].caption = captionEl.value;
+      paint(false);
+      markDirty();
+    });
+
+    document.getElementById("copy-prev").addEventListener("click", () => {
+      if (index === 0) return;
+      setCaption(images[index - 1].caption, true);
+    });
+    document.getElementById("clear-tags").addEventListener("click", () => {
+      setCaption(trigger, true);
+    });
+    document.getElementById("prev").addEventListener("click", () => move(-1));
+    document.getElementById("next").addEventListener("click", () => move(1));
+    document.getElementById("filter-all").addEventListener("click", () => setFilter("all"));
+    document.getElementById("filter-empty").addEventListener("click", () => setFilter("empty"));
+
+    function setFilter(next) {
+      filter = next;
+      document.getElementById("filter-all").setAttribute("aria-pressed", String(next === "all"));
+      document.getElementById("filter-empty").setAttribute("aria-pressed", String(next === "empty"));
+      const vis = visibleIndexes();
+      if (!vis.includes(index) && vis.length) index = vis[0];
+      paint();
+    }
+
+    document.addEventListener("keydown", (e) => {
+      const typing = e.target.matches("input, textarea");
+      if (typing) return;
+      if (e.key === "ArrowRight") { e.preventDefault(); move(1); }
+      if (e.key === "ArrowLeft") { e.preventDefault(); move(-1); }
+    });
+
+    document.getElementById("open-folder").addEventListener("click", () => {
+      document.getElementById("open-folder-2").focus();
+    });
+
+    paint();
+    statusEl.textContent = "Saved";
+  </script>
+</body>
+</html>
