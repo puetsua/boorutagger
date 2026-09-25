@@ -1,3 +1,4 @@
+import { joinTags } from "./tags";
 import type { ImageItem } from "./types";
 
 const POSES = ["standing", "sitting", "looking_at_viewer", "from_behind"];
@@ -34,7 +35,7 @@ export function buildSample(): ImageItem[] {
       tags.push(n % 4 === 0 ? "full_body" : "upper_body");
       tags.push(BACKGROUNDS[n % 3]);
       if (n % 8 === 0) tags.push("outdoors", "night");
-      caption = tags.join(", ");
+      caption = joinTags(tags);
     }
     images.push({
       id: `sample/${name}`,

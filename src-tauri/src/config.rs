@@ -12,9 +12,6 @@ const MAX_FOLDERS: usize = 30;
 const MAX_FILTER_TAGS: usize = 40;
 const MAX_PRESETS: usize = 30;
 const MAX_PRESET_NAME: usize = 40;
-const MAX_COLORED_TAGS: usize = 80;
-const MAX_COLOR_RULES: usize = 20;
-const MAX_RULE_LENGTH: usize = 80;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -53,10 +50,6 @@ pub struct UserConfig {
     pub folder_filters: HashMap<String, FolderFilters>,
     #[serde(default)]
     pub filter_presets: Vec<FilterPreset>,
-    #[serde(default)]
-    pub colored_tags: Option<Vec<String>>,
-    #[serde(default)]
-    pub color_rules: Option<Vec<String>>,
 }
 
 impl Default for UserConfig {
@@ -69,8 +62,6 @@ impl Default for UserConfig {
             last_folder: None,
             folder_filters: HashMap::new(),
             filter_presets: Vec::new(),
-            colored_tags: None,
-            color_rules: None,
         }
     }
 }
@@ -148,25 +139,7 @@ fn normalize(mut config: UserConfig) -> UserConfig {
     }
     config.folder_filters = clean_folder_filters(config.folder_filters);
     config.filter_presets = clean_presets(config.filter_presets);
-    config.colored_tags = config.colored_tags.map(|tags| clean_tag_list(tags, MAX_COLORED_TAGS));
-    config.color_rules = config.color_rules.map(clean_color_rules);
     config
-}
-
-fn clean_color_rules(rules: Vec<String>) -> Vec<String> {
-    let mut seen = HashSet::new();
-    let mut out = Vec::new();
-    for rule in rules {
-        let rule = rule.trim();
-        if rule.is_empty() || rule.len() > MAX_RULE_LENGTH || !seen.insert(rule.to_string()) {
-            continue;
-        }
-        out.push(rule.to_string());
-        if out.len() == MAX_COLOR_RULES {
-            break;
-        }
-    }
-    out
 }
 
 fn clean_presets(presets: Vec<FilterPreset>) -> Vec<FilterPreset> {
@@ -237,16 +210,22 @@ fn clean_tags(tags: Vec<String>) -> Vec<String> {
     clean_tag_list(tags, MAX_FILTER_TAGS)
 }
 
+fn normalize_tag(raw: &str) -> String {
+    let tag = raw
+        .trim()
+        .to_lowercase()
+        .replace("\\(", "(")
+        .replace("\\)", ")")
+        .replace("_(", " (")
+        .replace(',', "");
+    tag.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
 fn clean_tag_list(tags: Vec<String>, limit: usize) -> Vec<String> {
     let mut seen = HashSet::new();
     let mut out = Vec::new();
     for tag in tags {
-        let tag = tag
-            .split_whitespace()
-            .collect::<Vec<_>>()
-            .join("_")
-            .replace(',', "")
-            .to_lowercase();
+        let tag = normalize_tag(&tag);
         if tag.is_empty() || !seen.insert(tag.clone()) {
             continue;
         }
@@ -303,7 +282,13 @@ mod tests {
             show_sidecar: true,
             gallery_view: "tile".into(),
             recent_count: 4,
-            recent: vec!["1girl".into(), "solo".into(), "Blue Hair".into()],
+            recent: vec![
+                "1girl".into(),
+                "solo".into(),
+                "Blue Hair".into(),
+                "My_Trigger".into(),
+                "Tank_(Container)".into(),
+            ],
             last_folder: Some(r"D:\data\set".into()),
             folder_filters: HashMap::from([(
                 r"D:\data\set\".into(),
@@ -318,20 +303,21 @@ mod tests {
                 has_tags: vec!["solo".into()],
                 missing_tags: vec!["blue hair".into()],
             }],
-            colored_tags: Some(vec!["Yellow Background".into(), "".into()]),
-            color_rules: Some(vec![" background$ ".into(), "".into(), "x".repeat(MAX_RULE_LENGTH + 1)]),
         };
         save_to(&path, &config).unwrap();
         let loaded = load_from(&path).unwrap();
         assert!(loaded.show_sidecar);
         assert_eq!(loaded.gallery_view, "tile");
         assert_eq!(loaded.recent_count, 4);
-        assert_eq!(loaded.recent, ["1girl", "solo", "blue_hair"]);
+        assert_eq!(
+            loaded.recent,
+            ["1girl", "solo", "blue hair", "my_trigger", "tank (container)"]
+        );
         assert_eq!(loaded.last_folder.as_deref(), Some(r"D:\data\set"));
         assert_eq!(
             loaded.folder_filters.get(r"d:\data\set"),
             Some(&FolderFilters {
-                has_tags: vec!["1girl".into(), "blue_hair".into()],
+                has_tags: vec!["1girl".into(), "blue hair".into()],
                 missing_tags: vec!["solo".into()],
             })
         );
@@ -341,11 +327,9 @@ mod tests {
                 id: "solo".into(),
                 name: "Solo shots".into(),
                 has_tags: vec!["solo".into()],
-                missing_tags: vec!["blue_hair".into()],
+                missing_tags: vec!["blue hair".into()],
             }]
         );
-        assert_eq!(loaded.colored_tags, Some(vec!["yellow_background".into()]));
-        assert_eq!(loaded.color_rules, Some(vec!["background$".into()]));
         let _ = fs::remove_dir_all(path.parent().unwrap());
     }
 
@@ -365,8 +349,6 @@ mod tests {
                 has_tags: vec![],
                 missing_tags: vec![],
             }],
-            colored_tags: None,
-            color_rules: None,
         };
         save_to(&path, &config).unwrap();
         let loaded = load_from(&path).unwrap();

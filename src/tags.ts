@@ -1,57 +1,17 @@
-export const TAG_CATEGORIES = ["character", "copyright", "artist", "general", "meta"] as const;
-
-export type TagCategory = (typeof TAG_CATEGORIES)[number];
-
-export const DEFAULT_COLORED_TAGS = [
-  "simple_background",
-  "white_background",
-  "grey_background",
-  "gray_background",
-  "transparent_background",
-  "outdoors",
-  "indoors",
-  "night",
-  "day",
-  "from_behind",
-  "upper_body",
-  "full_body",
-  "portrait",
-  "close-up",
-  "close_up",
-  "cowboy_shot",
-  "rating_safe",
-  "rating_questionable",
-  "rating_explicit",
-];
-
-export function compileColorRules(patterns: readonly string[]): RegExp[] {
-  const rules: RegExp[] = [];
-  for (const pattern of patterns) {
-    try {
-      rules.push(new RegExp(pattern, "i"));
-    } catch {
-      continue;
-    }
-  }
-  return rules;
-}
-
-export function categoryOf(tag: string, colored: ReadonlySet<string>, rules: readonly RegExp[]): TagCategory {
-  const name = tag.toLowerCase();
-  if (colored.has(name)) return "meta";
-  const label = pretty(name);
-  for (const rule of rules) {
-    if (rule.test(name) || rule.test(label)) return "meta";
-  }
-  return "general";
-}
-
-export function pretty(tag: string): string {
-  return tag.replace(/_/g, " ");
-}
-
 export function normTag(raw: string): string {
-  return raw.trim().toLowerCase().replace(/\s+/g, "_").replace(/,/g, "");
+  return raw
+    .trim()
+    .toLowerCase()
+    .replace(/\\\(/g, "(")
+    .replace(/\\\)/g, ")")
+    .replace(/_\(/g, " (")
+    .replace(/,/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function captionTag(tag: string): string {
+  return tag.replace(/\(/g, "\\(").replace(/\)/g, "\\)");
 }
 
 export function parseTags(text: string): string[] {
@@ -70,9 +30,10 @@ export function joinTags(tags: readonly string[]): string {
   const seen = new Set<string>();
   const out: string[] = [];
   for (const tag of tags) {
-    if (!tag || seen.has(tag)) continue;
-    seen.add(tag);
-    out.push(tag);
+    const clean = normTag(tag);
+    if (!clean || seen.has(clean)) continue;
+    seen.add(clean);
+    out.push(captionTag(clean));
   }
   return out.join(", ");
 }
@@ -99,8 +60,8 @@ export function imageVisible(name: string, caption: string, filters: WorkingFilt
   if (filters.needsCaption && !needsCaption(caption)) return false;
   const query = filters.query.trim().toLowerCase();
   if (query) {
-    const queryTag = normTag(filters.query);
-    const hay = `${name} ${tags.join(" ")} ${tags.map(pretty).join(" ")}`.toLowerCase();
+    const hay = `${name} ${tags.join(" ")}`.toLowerCase();
+    const queryTag = normTag(query);
     if (!hay.includes(query) && !hay.includes(queryTag)) return false;
   }
   if (!filters.hasTags.every((tag) => tags.includes(tag))) return false;
@@ -114,46 +75,6 @@ export function moveItem<T>(list: readonly T[], from: number, to: number): T[] {
   const [item] = next.splice(from, 1);
   next.splice(to, 0, item);
   return next;
-}
-
-export function tagLedger(captions: readonly string[], focusCaption: string): {
-  shared: string[];
-  partial: { tag: string; count: number }[];
-} {
-  const total = captions.length;
-  const counts = new Map<string, number>();
-  for (const caption of captions) {
-    for (const tag of new Set(parseTags(caption))) {
-      counts.set(tag, (counts.get(tag) ?? 0) + 1);
-    }
-  }
-  const sharedSet = new Set(
-    [...counts.entries()].filter(([, count]) => count === total).map(([tag]) => tag),
-  );
-  const shared = parseTags(focusCaption).filter((tag) => sharedSet.has(tag));
-  for (const tag of sharedSet) {
-    if (!shared.includes(tag)) shared.push(tag);
-  }
-  const partial = [...counts.entries()]
-    .filter(([, count]) => count !== total)
-    .map(([tag, count]) => ({ tag, count }))
-    .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
-  return { shared, partial };
-}
-
-export function applySharedOrder(caption: string, nextShared: readonly string[]): string {
-  const tags = parseTags(caption);
-  const shared = new Set(nextShared);
-  const present = nextShared.filter((tag) => tags.includes(tag));
-  let index = 0;
-  return joinTags(
-    tags.map((tag) => {
-      if (!shared.has(tag)) return tag;
-      const replacement = present[index];
-      index += 1;
-      return replacement ?? tag;
-    }),
-  );
 }
 
 export function clampCount(value: string | number): number {

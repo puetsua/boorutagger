@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { GALLERY_VIEWS, validRule, type GalleryView, type Settings } from "../settings";
-import { clampCount, normTag, pretty } from "../tags";
+import { useEffect, useRef, type CSSProperties } from "react";
+import { GALLERY_VIEWS, type GalleryView, type Settings } from "../settings";
+import { clampCount } from "../tags";
 
 const VIEW_LABELS: Record<GalleryView, string> = {
   masonry: "Masonry",
@@ -71,12 +71,6 @@ export function SettingsDialog({ open, settings, onClose, onChange }: SettingsDi
             ))}
           </div>
         </fieldset>
-        <ColoredTags
-          tags={settings.coloredTags}
-          rules={settings.colorRules}
-          onTags={(coloredTags) => onChange({ ...settings, coloredTags })}
-          onRules={(colorRules) => onChange({ ...settings, colorRules })}
-        />
         <CountSlider
           label="Last tags used"
           hint="How many of the last tags you added to show. 0 hides the list."
@@ -89,117 +83,6 @@ export function SettingsDialog({ open, settings, onClose, onChange }: SettingsDi
       </form>
     </dialog>
     </>
-  );
-}
-
-function ColoredTags({
-  tags,
-  rules,
-  onTags,
-  onRules,
-}: {
-  tags: readonly string[];
-  rules: readonly string[];
-  onTags: (tags: string[]) => void;
-  onRules: (rules: string[]) => void;
-}) {
-  const [draft, setDraft] = useState("");
-  const [rule, setRule] = useState("");
-  const [ruleError, setRuleError] = useState("");
-
-  function add() {
-    const tag = normTag(draft);
-    setDraft("");
-    if (!tag || tags.includes(tag)) return;
-    onTags([...tags, tag]);
-  }
-
-  function addRule() {
-    const pattern = rule.trim();
-    if (!pattern) return;
-    if (!validRule(pattern)) {
-      setRuleError("That regex is not valid.");
-      return;
-    }
-    setRule("");
-    setRuleError("");
-    if (rules.includes(pattern)) return;
-    onRules([...rules, pattern]);
-  }
-
-  return (
-    <fieldset className="setting choices">
-      <legend>Colored tags</legend>
-      <p>A tag shows a color bar when it is listed, or when it matches a regex.</p>
-      {tags.length > 0 && (
-        <div className="fchips">
-          {tags.map((tag) => (
-            <span className="fchip" key={tag}>
-              <i className="swatch meta" />
-              <span>{pretty(tag)}</span>
-              <button
-                type="button"
-                aria-label={`Remove ${pretty(tag)}`}
-                onClick={() => onTags(tags.filter((item) => item !== tag))}
-              >
-                ×
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
-      <input
-        className="color-tag-input"
-        type="text"
-        list="vocab"
-        placeholder="Add a tag"
-        spellCheck={false}
-        autoComplete="off"
-        value={draft}
-        onChange={(event) => setDraft(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key !== "Enter") return;
-          event.preventDefault();
-          add();
-        }}
-      />
-      {rules.length > 0 && (
-        <div className="fchips">
-          {rules.map((pattern) => (
-            <span className="fchip" key={pattern}>
-              <i className="swatch meta" />
-              <span>{pattern}</span>
-              <button
-                type="button"
-                aria-label={`Remove regex ${pattern}`}
-                onClick={() => onRules(rules.filter((item) => item !== pattern))}
-              >
-                ×
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
-      <input
-        className="color-tag-input"
-        type="text"
-        placeholder="Regex, such as background$"
-        spellCheck={false}
-        autoComplete="off"
-        aria-label="Regex"
-        value={rule}
-        onChange={(event) => {
-          setRule(event.target.value);
-          setRuleError("");
-        }}
-        onKeyDown={(event) => {
-          if (event.key !== "Enter") return;
-          event.preventDefault();
-          addRule();
-        }}
-      />
-      {ruleError && <p className="rule-error">{ruleError}</p>}
-    </fieldset>
   );
 }
 

@@ -1,14 +1,6 @@
-import { useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent, type KeyboardEvent, type PointerEvent } from "react";
+import { useEffect, useRef, useState, type DragEvent as ReactDragEvent, type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode } from "react";
 import { TagMenu } from "./ImageMenu";
-import {
-  categoryOf,
-  compileColorRules,
-  needsCaption,
-  parseTags,
-  pretty,
-  sidecarName,
-  tagLedger,
-} from "../tags";
+import { needsCaption, parseTags, sidecarName } from "../tags";
 import { GALLERY_DRAG_TYPE, type ImageItem } from "../types";
 
 type TagFilterKind = "has" | "missing" | "only";
@@ -18,15 +10,12 @@ type CaptionSheetProps = {
   selected: ReadonlySet<string>;
   focus: ImageItem | null;
   showSidecar: boolean;
-  coloredTags: readonly string[];
-  colorRules: readonly string[];
   references: readonly ImageItem[];
   recentCount: number;
   recent: readonly string[];
   error: string;
   onAddTag: (tag: string) => void;
   onRemoveTag: (tag: string) => void;
-  onReorderShared: (from: number, to: number) => void;
   onReorderSingle: (from: number, to: number) => void;
   onRemoveChip: (index: number) => void;
   onAddReference: (id: string) => void;
@@ -48,15 +37,12 @@ export function CaptionSheet({
   selected,
   focus,
   showSidecar,
-  coloredTags,
-  colorRules,
   references,
   recentCount,
   recent,
   error,
   onAddTag,
   onRemoveTag,
-  onReorderShared,
   onReorderSingle,
   onRemoveChip,
   onAddReference,
@@ -74,30 +60,30 @@ export function CaptionSheet({
 }: CaptionSheetProps) {
   const selectedImages = images.filter((image) => selected.has(image.id));
   const count = selectedImages.length;
-  const who = count === 0 ? "Nothing selected" : count === 1 ? "Selected image" : `${count} images`;
-  const focusCaption = selected.has(focus?.id ?? "") ? focus?.caption ?? "" : selectedImages[0]?.caption ?? "";
-  const ledger = count > 1 ? tagLedger(selectedImages.map((image) => image.caption), focusCaption) : null;
+  const selectedIds = [...selected];
+  const lastSelected = images.find((image) => image.id === selectedIds[selectedIds.length - 1]);
+  const preview = focus && selected.has(focus.id) ? focus : lastSelected ?? null;
   const singleTags = count === 1 ? parseTags(selectedImages[0].caption) : [];
-  const ownedTags = new Set(count === 1 ? singleTags : (ledger?.shared ?? []));
+  const selectionTags = count > 1 ? tagCounts(selectedImages) : [];
+  const ownedTags = new Set(
+    count === 1 ? singleTags : selectionTags.filter(([, have]) => have === count).map(([tag]) => tag),
+  );
 
   const [recentOpen, setRecentOpen] = useState(true);
   const zoomRef = useRef<HTMLDialogElement>(null);
-  const colored = useMemo(() => new Set(coloredTags), [coloredTags]);
-  const rules = useMemo(() => compileColorRules(colorRules), [colorRules]);
-  const meta = (tag: string) => categoryOf(tag, colored, rules) === "meta";
   const recentTags = recent.slice(0, recentCount);
   const referenceTags = referenceTagList(references);
 
   useEffect(() => {
-    if ((!focus || count === 0) && zoomed) onCloseZoom();
-  }, [focus, count, zoomed, onCloseZoom]);
+    if ((!preview || count === 0) && zoomed) onCloseZoom();
+  }, [preview, count, zoomed, onCloseZoom]);
 
   useEffect(() => {
     const dialog = zoomRef.current;
     if (!dialog) return;
-    if (zoomed && focus && !dialog.open) dialog.show();
+    if (zoomed && preview && !dialog.open) dialog.show();
     if (!zoomed && dialog.open) dialog.close();
-  }, [zoomed, focus]);
+  }, [zoomed, preview]);
 
   useEffect(() => {
     if (!zoomed) return undefined;
@@ -113,34 +99,33 @@ export function CaptionSheet({
 
   return (
     <aside className="sheet" aria-label="Edit captions">
-      {count > 0 && focus && (
+      {preview && (
       <div
         className="preview"
         onContextMenu={(event) => {
           event.preventDefault();
-          onImageMenu(focus.id, event.clientX, event.clientY);
+          onImageMenu(preview.id, event.clientX, event.clientY);
         }}
       >
         <button
           type="button"
           className="thumb"
-          aria-label={`Zoom ${focus.name}`}
+          aria-label={`Zoom ${preview.name}`}
           onClick={onZoom}
         >
-          <img src={focus.src} alt="" />
+          <img src={preview.src} alt="" />
         </button>
         <div>
-          <div className="name" title={focus.path}>{focus.name}</div>
-          <div className="who">{who}</div>
+          <div className="name" title={preview.path}>{preview.name}</div>
         </div>
       </div>
       )}
-      {count > 0 && focus && zoomed && <div className="scrim zoom-scrim" />}
-      {count > 0 && focus && (
+      {preview && zoomed && <div className="scrim zoom-scrim" />}
+      {preview && (
         <dialog
           ref={zoomRef}
           className="zoom"
-          aria-label={focus.name}
+          aria-label={preview.name}
           onClick={(event) => {
             if (event.target === event.currentTarget) onCloseZoom();
           }}
@@ -153,10 +138,10 @@ export function CaptionSheet({
             onClick={onCloseZoom}
             onContextMenu={(event) => {
               event.preventDefault();
-              onImageMenu(focus.id, event.clientX, event.clientY);
+              onImageMenu(preview.id, event.clientX, event.clientY);
             }}
           >
-            <img src={focus.src} alt="" />
+            <img src={preview.src} alt="" />
           </button>
         </dialog>
       )}
@@ -167,71 +152,23 @@ export function CaptionSheet({
           </p>
         )}
         {count === 0 ? (
-          <FolderStats
-            images={images}
-            hasTags={hasTags}
-            isMeta={meta}
-            onFilterTag={onFilterTag}
-            onCopyTag={onCopyTag}
-          />
+          <FolderStats images={images} hasTags={hasTags} onFilterTag={onFilterTag} onCopyTag={onCopyTag} />
         ) : (
           <>
-        {ledger && (
+        {count > 1 && (
           <div className="own-tags">
-            {ledger.shared.length === 0 && ledger.partial.length === 0 && (
+            {selectionTags.length === 0 ? (
               <p className="lede">None of the selected images have a caption yet.</p>
-            )}
-            {ledger.shared.length > 0 && (
-              <>
-                <div className="section">On every image. Drag to reorder.</div>
-                <div className="reorder">
-                {ledger.shared.map((tag, index) => (
-                  <div
-                    key={tag}
-                    className={meta(tag) ? "trow" : "trow plain"}
-                    data-shared={tag}
-                    {...reorderHandlers(index, ledger.shared.length, false, onReorderShared)}
-                  >
-                    {meta(tag) && (
-                      <i className="swatch meta" />
-                    )}
-                    <span className="tagname">{pretty(tag)}</span>
-                    <span className="tagops">
-                      <span className="frac">
-                        {count}/{count}
-                      </span>
-                      <button className="quiet" type="button" onClick={() => onRemoveTag(tag)}>
-                        Remove
-                      </button>
-                    </span>
-                  </div>
-                ))}
-                </div>
-              </>
-            )}
-            {ledger.partial.length > 0 && (
-              <>
-                <div className="section">On some</div>
-                {ledger.partial.map(({ tag, count: have }) => (
-                  <div className={meta(tag) ? "trow" : "trow plain"} key={tag}>
-                    {meta(tag) && (
-                      <i className="swatch meta" />
-                    )}
-                    <span className="tagname">{pretty(tag)}</span>
-                    <span className="tagops">
-                      <span className="frac">
-                        {have}/{count}
-                      </span>
-                      <button className="quiet" type="button" onClick={() => onAddTag(tag)}>
-                        Add to rest
-                      </button>
-                      <button className="quiet" type="button" onClick={() => onRemoveTag(tag)}>
-                        Remove
-                      </button>
-                    </span>
-                  </div>
-                ))}
-              </>
+            ) : (
+              <TagBadges
+              tags={selectionTags}
+              hasTags={hasTags}
+              onFilterTag={onFilterTag}
+              onCopyTag={onCopyTag}
+              onApply={onAddTag}
+              onRemove={onRemoveTag}
+              chips
+            />
             )}
           </div>
         )}
@@ -240,27 +177,34 @@ export function CaptionSheet({
             {singleTags.length === 0 ? (
               <p className="hint-line">Untagged</p>
             ) : (
-              <>
-                <p className="section">Drag tags to reorder</p>
-                <div className="chips">
-                  {singleTags.map((tag, index) => (
-                    <span
-                      key={`${tag}-${index}`}
-                      className="chip"
-                      data-chip={String(index)}
-                      {...reorderHandlers(index, singleTags.length, true, onReorderSingle)}
-                    >
-                      {meta(tag) && (
-                        <i className="swatch meta" />
-                      )}
-                      <span className="tag">{pretty(tag)}</span>
-                      <button type="button" aria-label={`Remove ${pretty(tag)}`} onClick={() => onRemoveChip(index)}>
-                        ×
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              </>
+              <TagChipMenu
+                onFilterTag={onFilterTag}
+                onCopyTag={onCopyTag}
+                onApply={onAddTag}
+                onRemove={onRemoveTag}
+              >
+                {(openMenu) => (
+                  <>
+                    <p className="section">Drag tags to reorder</p>
+                    <div className="chips">
+                      {singleTags.map((tag, index) => (
+                        <span
+                          key={`${tag}-${index}`}
+                          className="chip"
+                          data-chip={String(index)}
+                          {...reorderHandlers(index, singleTags.length, true, onReorderSingle)}
+                          onContextMenu={(event) => openMenu(tag, event)}
+                        >
+                          <span className="tag">{tag}</span>
+                          <button type="button" aria-label={`Remove ${tag}`} onClick={() => onRemoveChip(index)}>
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </TagChipMenu>
             )}
           </div>
         )}
@@ -295,7 +239,7 @@ export function CaptionSheet({
                 .filter((tag) => !ownedTags.has(tag))
                 .map((tag) => (
                   <button key={tag} type="button" onClick={() => onAddTag(tag)}>
-                    {pretty(tag)}
+                    {tag}
                   </button>
                 ))}
             </div>
@@ -327,21 +271,21 @@ export function CaptionSheet({
                       className={ownedTags.has(tag) ? "present" : undefined}
                       onClick={() => onAddTag(tag)}
                     >
-                      {pretty(tag)}
+                      {tag}
                     </button>
                   ))}
                 </div>
               ))}
           </div>
         )}
-        {showSidecar && (focus || selectedImages[0]) && (
+        {showSidecar && preview && (
           <label className="field" htmlFor="caption">
-            <span>Sidecar text · {sidecarName((focus ?? selectedImages[0]).name)}</span>
+            <span>Sidecar text · {sidecarName(preview.name)}</span>
             <textarea
               id="caption"
               spellCheck={false}
               placeholder="comma-separated tags"
-              value={(focus ?? selectedImages[0]).caption}
+              value={preview.caption}
               onChange={(event) => onCaptionChange(event.target.value)}
               onFocus={onCaptionFocus}
               onBlur={onCaptionBlur}
@@ -428,7 +372,7 @@ function References({
                 <img src={image.src} alt="" draggable={false} />
               </span>
               <span className="ref-name">{image.name}</span>
-              <button className="quiet" type="button" onClick={() => onRemove(image.id)}>
+              <button className="quiet warn" type="button" onClick={() => onRemove(image.id)}>
                 Remove
               </button>
             </div>
@@ -439,34 +383,156 @@ function References({
   );
 }
 
+function tagCounts(images: readonly ImageItem[]): [string, number][] {
+  const counts = new Map<string, number>();
+  for (const image of images) {
+    for (const tag of new Set(parseTags(image.caption))) counts.set(tag, (counts.get(tag) ?? 0) + 1);
+  }
+  return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+}
+
+function TagChipMenu({
+  onFilterTag,
+  onCopyTag,
+  onApply,
+  onRemove,
+  children,
+}: {
+  onFilterTag: (kind: TagFilterKind, tag: string) => void;
+  onCopyTag: (tag: string) => void;
+  onApply?: (tag: string) => void;
+  onRemove?: (tag: string) => void;
+  children: (openMenu: (tag: string, event: MouseEvent) => void) => ReactNode;
+}) {
+  const [menu, setMenu] = useState<{ tag: string; x: number; y: number } | null>(null);
+  function openMenu(tag: string, event: MouseEvent) {
+    event.preventDefault();
+    setMenu({ tag, x: event.clientX, y: event.clientY });
+  }
+  return (
+    <>
+      {children(openMenu)}
+      {menu && (
+        <TagMenu
+          x={menu.x}
+          y={menu.y}
+          tag={menu.tag}
+          onClose={() => setMenu(null)}
+          onHas={() => {
+            onFilterTag("has", menu.tag);
+            setMenu(null);
+          }}
+          onWithout={() => {
+            onFilterTag("missing", menu.tag);
+            setMenu(null);
+          }}
+          onOnly={() => {
+            onFilterTag("only", menu.tag);
+            setMenu(null);
+          }}
+          onCopy={() => {
+            onCopyTag(menu.tag);
+            setMenu(null);
+          }}
+          onApply={
+            onApply
+              ? () => {
+                  onApply(menu.tag);
+                  setMenu(null);
+                }
+              : undefined
+          }
+          onRemove={
+            onRemove
+              ? () => {
+                  onRemove(menu.tag);
+                  setMenu(null);
+                }
+              : undefined
+          }
+        />
+      )}
+    </>
+  );
+}
+
+function TagBadges({
+  tags,
+  hasTags,
+  onFilterTag,
+  onCopyTag,
+  onApply,
+  onRemove,
+  chips,
+}: {
+  tags: readonly [string, number][];
+  hasTags: readonly string[];
+  onFilterTag: (kind: TagFilterKind, tag: string) => void;
+  onCopyTag: (tag: string) => void;
+  onApply?: (tag: string) => void;
+  onRemove?: (tag: string) => void;
+  chips?: boolean;
+}) {
+  return (
+    <TagChipMenu onFilterTag={onFilterTag} onCopyTag={onCopyTag} onApply={onApply} onRemove={onRemove}>
+      {(openMenu) =>
+        chips ? (
+          <div className="chips static">
+            {tags.map(([tag, have]) => (
+              <span key={tag} className="chip" onContextMenu={(event) => openMenu(tag, event)}>
+                <span className="tag">{tag}</span>
+                {have > 1 && <span className="n">{have}</span>}
+                {onRemove && (
+                  <button type="button" aria-label={`Remove ${tag}`} onClick={() => onRemove(tag)}>
+                    ×
+                  </button>
+                )}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <div className="tag-badges" aria-label="Tag counts">
+            {tags.map(([tag, have]) => (
+              <button
+                key={tag}
+                type="button"
+                className="tag-badge"
+                aria-pressed={hasTags.includes(tag)}
+                onClick={() => onFilterTag("has", tag)}
+                onContextMenu={(event) => openMenu(tag, event)}
+              >
+                <span>{tag}</span>
+                {have > 1 && <span className="n">{have}</span>}
+              </button>
+            ))}
+          </div>
+        )
+      }
+    </TagChipMenu>
+  );
+}
+
 function FolderStats({
   images,
   hasTags,
-  isMeta,
   onFilterTag,
   onCopyTag,
 }: {
   images: readonly ImageItem[];
   hasTags: readonly string[];
-  isMeta: (tag: string) => boolean;
   onFilterTag: (kind: TagFilterKind, tag: string) => void;
   onCopyTag: (tag: string) => void;
 }) {
-  const [menu, setMenu] = useState<{ tag: string; x: number; y: number } | null>(null);
   let captioned = 0;
-  const tagCounts = new Map<string, number>();
   const folders = new Set<string>();
   for (const image of images) {
-    const tags = parseTags(image.caption);
     if (!needsCaption(image.caption)) captioned += 1;
-    for (const tag of new Set(tags)) tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1);
     const slash = image.name.lastIndexOf("/");
     if (slash > 0) folders.add(image.name.slice(0, slash));
   }
   const total = images.length;
   const empty = total - captioned;
-  const unique = tagCounts.size;
-  const tags = [...tagCounts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  const tags = tagCounts(images);
 
   return (
     <div>
@@ -491,54 +557,10 @@ function FolderStats({
       )}
       <div className="stat">
         <span>Unique tags</span>
-        <span>{unique}</span>
+        <span>{tags.length}</span>
       </div>
       {tags.length > 0 && (
-        <div className="tag-badges" aria-label="Tag counts">
-          {tags.map(([tag, have]) => (
-            <button
-              key={tag}
-              type="button"
-              className="tag-badge"
-              aria-pressed={hasTags.includes(tag)}
-              onClick={() => onFilterTag("has", tag)}
-              onContextMenu={(event) => {
-                event.preventDefault();
-                setMenu({ tag, x: event.clientX, y: event.clientY });
-              }}
-            >
-              {isMeta(tag) && (
-                <i className="swatch meta" />
-              )}
-              <span>{pretty(tag)}</span>
-              {have > 1 && <span className="n">{have}</span>}
-            </button>
-          ))}
-        </div>
-      )}
-      {menu && (
-        <TagMenu
-          x={menu.x}
-          y={menu.y}
-          tag={menu.tag}
-          onClose={() => setMenu(null)}
-          onHas={() => {
-            onFilterTag("has", menu.tag);
-            setMenu(null);
-          }}
-          onWithout={() => {
-            onFilterTag("missing", menu.tag);
-            setMenu(null);
-          }}
-          onOnly={() => {
-            onFilterTag("only", menu.tag);
-            setMenu(null);
-          }}
-          onCopy={() => {
-            onCopyTag(menu.tag);
-            setMenu(null);
-          }}
-        />
+        <TagBadges tags={tags} hasTags={hasTags} onFilterTag={onFilterTag} onCopyTag={onCopyTag} />
       )}
     </div>
   );
@@ -587,8 +609,6 @@ function insertionIndex(parent: HTMLElement, x: number, y: number, horizontal: b
 function makeGhost(source: HTMLElement): HTMLElement {
   const ghost = document.createElement("span");
   ghost.className = "chip tag-ghost";
-  const swatch = source.querySelector(".swatch");
-  if (swatch) ghost.appendChild(swatch.cloneNode(true));
   const label = source.querySelector(".tag, .tagname");
   const text = document.createElement("span");
   text.className = "tag";

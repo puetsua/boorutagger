@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import type { FilterPreset } from "../settings";
-import { pretty } from "../tags";
 
 type WorkingSetProps = {
   total: number;
@@ -297,15 +296,15 @@ export function WorkingSet({
 }
 
 function suggestPresetName(hasTags: readonly string[], missingTags: readonly string[]): string {
-  const has = hasTags.map(pretty).join(", ");
-  const missing = missingTags.map((tag) => `without ${pretty(tag)}`).join(", ");
+  const has = hasTags.join(", ");
+  const missing = missingTags.map((tag) => `without ${tag}`).join(", ");
   return [has, missing].filter(Boolean).join(", ").slice(0, 40);
 }
 
 function presetDetail(preset: FilterPreset): string {
   const parts: string[] = [];
-  if (preset.hasTags.length) parts.push(`Has ${preset.hasTags.map(pretty).join(", ")}`);
-  if (preset.missingTags.length) parts.push(`Without ${preset.missingTags.map(pretty).join(", ")}`);
+  if (preset.hasTags.length) parts.push(`Has ${preset.hasTags.join(", ")}`);
+  if (preset.missingTags.length) parts.push(`Without ${preset.missingTags.join(", ")}`);
   return parts.join(". ");
 }
 
@@ -323,8 +322,8 @@ function FilterChips({
     <div className="fchips">
       {tags.map((tag) => (
         <span className="fchip" key={tag}>
-          <span>{pretty(tag)}</span>
-          <button type="button" aria-label={`Remove ${pretty(tag)} filter`} onClick={() => onRemove(kind, tag)}>
+          <span>{tag}</span>
+          <button type="button" aria-label={`Remove ${tag} filter`} onClick={() => onRemove(kind, tag)}>
             ×
           </button>
         </span>

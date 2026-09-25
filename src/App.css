@@ -16,11 +16,8 @@
   --sans: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
   --mono: "Cascadia Mono", "IBM Plex Mono", Consolas, ui-monospace, monospace;
   --radius: 4px;
-  --character: #3d9b6a;
-  --copyright: #c4a0ff;
-  --artist: #e07a5f;
-  --general: #9aa4b2;
-  --meta: #a56b12;
+  --warning: #e07a5f;
+  --artist: var(--warning);
   --focus: var(--brand);
   --titlebar: 32px;
   color-scheme: dark;
@@ -275,7 +272,7 @@ button:disabled { opacity: 0.45; cursor: default; }
 }
 .preset[aria-pressed="true"] span { color: var(--brand); }
 .preset:hover:not([aria-pressed="true"]) { background: var(--bg-hover); }
-.preset.clear-filters { margin-top: 12px; color: var(--fg-3); font-weight: 500; }
+.preset.clear-filters { margin-top: 12px; color: var(--warning); font-weight: 500; }
 .preset.save {
   display: block;
   overflow: hidden;
@@ -322,11 +319,11 @@ button:disabled { opacity: 0.45; cursor: default; }
   border: 0;
   border-radius: var(--radius);
   background: transparent;
-  color: var(--fg-3);
+  color: var(--warning);
   font-size: 14px;
   line-height: 1;
 }
-.preset-remove:hover { background: var(--bg-hover); color: var(--fg-1); }
+.preset-remove:hover { background: var(--bg-hover); color: var(--warning); }
 .preset-name { margin-top: 6px; }
 .preset-row .preset-name {
   flex: 1;
@@ -366,11 +363,11 @@ button:disabled { opacity: 0.45; cursor: default; }
 .fchip button {
   border: 0;
   background: transparent;
-  color: var(--fg-3);
+  color: var(--warning);
   padding: 0 4px;
   font-size: 13px;
 }
-.fchip button:hover { color: var(--fg-1); }
+.fchip button:hover { color: var(--warning); }
 .shown {
   margin-top: 16px;
   font-family: var(--mono);
@@ -675,7 +672,6 @@ dialog.zoom[open] {
   overflow-wrap: anywhere;
   white-space: normal;
 }
-.preview .who { margin-top: 8px; font-size: 13px; font-weight: 600; }
 .tag-badges {
   display: flex;
   flex-wrap: wrap;
@@ -703,7 +699,6 @@ dialog.zoom[open] {
   border-color: transparent;
 }
 .tag-badge[aria-pressed="true"] .n { color: var(--brand); }
-.tag-badge .swatch { width: 3px; height: 10px; flex: none; }
 .tag-badge span:not(.n) {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -722,15 +717,12 @@ dialog.zoom[open] {
 .section { margin: 0 0 8px; font-size: 12px; font-weight: 600; color: var(--fg-3); }
 .trow {
   display: grid;
-  grid-template-columns: 6px minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
   align-items: center;
   padding: 6px 0;
   border-bottom: 1px solid var(--stroke-2);
 }
-.trow.plain { grid-template-columns: minmax(0, 1fr) auto; }
-.swatch { width: 3px; height: 18px; border-radius: 1px; }
-.swatch.meta { background: var(--meta); }
 .tagname {
   font-family: var(--mono);
   font-size: 12px;
@@ -787,16 +779,23 @@ dialog.zoom[open] {
   box-shadow: 0 0 0 1px var(--brand);
 }
 .trow[data-reorder-index] { cursor: grab; }
-.chip .swatch { width: 3px; height: auto; }
 .chip .tag { font-family: var(--mono); font-size: 12px; padding: 4px 6px 4px 8px; }
+.chip .n {
+  display: flex;
+  align-items: center;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--fg-3);
+  padding-right: 2px;
+}
 .chip button {
   border: 0;
   background: transparent;
-  color: var(--fg-3);
+  color: var(--warning);
   padding: 0 7px;
   font-size: 14px;
 }
-.chip button:hover { color: var(--fg-1); }
+.chip button:hover { color: var(--warning); }
 .field { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; font-size: 12px; font-weight: 600; color: var(--fg-3); }
 .sheet textarea, .sheet input[type="text"] {
   background: var(--bg-2);
@@ -823,6 +822,8 @@ dialog.zoom[open] {
   border-bottom: 1px solid var(--stroke-2);
 }
 .own-tags .trow:last-child { border-bottom: 0; }
+.chips.static .chip,
+.chips.static .chip:active { cursor: default; }
 .add-tag {
   display: flex;
   gap: 6px;
@@ -1022,26 +1023,15 @@ dialog h2 { margin: 0 0 12px; font-size: 16px; }
   margin: 0 0 4px;
 }
 .choices .check { font-weight: 500; margin: 4px 0 0; }
-.color-tag-input {
-  width: 100%;
-  margin-top: 4px;
-  background: var(--bg-2);
-  border: 1px solid var(--stroke);
-  border-radius: var(--radius);
-  padding: 6px 8px;
-  color: var(--fg-1);
-  font-family: var(--mono);
-  font-size: 12px;
-}
-.color-tag-input::placeholder { font-family: var(--sans); }
-.setting .rule-error { color: var(--artist); }
-.fchip .swatch { width: 3px; height: 12px; }
 .view-picks {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 8px;
   margin-top: 8px;
 }
+.view-picks,
+.slider-head,
+.setting input[type="range"] { max-width: 520px; }
 .view-pick {
   display: flex;
   flex-direction: column;
@@ -1142,6 +1132,8 @@ dialog .quiet { align-self: flex-end; }
   font-size: 13px;
   font-weight: 500;
 }
+.menu button.warn,
+.quiet.warn { color: var(--warning); }
 .menu button:hover:not(:disabled),
 .menu button:focus-visible { background: var(--bg-hover); }
 .menu hr {

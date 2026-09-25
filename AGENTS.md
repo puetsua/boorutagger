@@ -38,12 +38,11 @@ Fluent 2 Wine, dark only. No theme picker. No letter icons in boxes. Reuse the c
 | `--brand` | Selected text, slider, focus |
 | `--brand-subtle` | Selected fill |
 | `--brand-strong` | Primary filled action, used rarely |
+| `--warning` | Delete and remove actions |
 | `--sans` | UI copy, 14px, line-height 1.4 |
 | `--mono` | Tags, paths, counts, field values |
 | `--radius` | 4px on controls, menus, and dialogs |
 | `--titlebar` | 32px |
-
-Tag category colors stay on the swatch only: character, copyright, artist, general, meta.
 
 ### Chrome
 
@@ -71,7 +70,7 @@ Section labels are `.kicker`. Splits are `.filters .split` or `border-bottom: 1p
 - Title-bar icon buttons are 28px, borderless. Window buttons are `.win-btn`.
 - Text fields: `--bg-2`, 1px `--stroke`, `--mono` at 12px, placeholder in `--sans`.
 - Counts from 0 to 20 are sliders, with the number beside the label. 0 hides that list.
-- Tags render with `pretty()` (underscores become spaces). Stored tags stay normalized.
+- Danbooru `tag_(name)` is stored as `tag \(name\)` and shown as `tag (name)`. Other underscores stay, including trigger words.
 - Chips and filter chips use the existing chip styles. Do not invent a new pill.
 - Quiet lists do not show a count unless the row is All images or Untagged.
 

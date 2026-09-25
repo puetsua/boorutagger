@@ -33,17 +33,7 @@ import {
   type FolderFilters,
   type Settings,
 } from "./settings";
-import {
-  applySharedOrder,
-  imageVisible,
-  joinTags,
-  moveItem,
-  needsCaption,
-  normTag,
-  parseTags,
-  pretty,
-  tagLedger,
-} from "./tags";
+import { imageVisible, joinTags, moveItem, needsCaption, normTag, parseTags } from "./tags";
 import type { ImageItem } from "./types";
 import { useCaptionSaver } from "./useCaptionSaver";
 import "./App.css";
@@ -475,25 +465,6 @@ export default function App() {
     setFocusToken((current) => ({ selector, nonce: (current?.nonce ?? 0) + 1 }));
   }
 
-  function reorderShared(from: number, to: number) {
-    const ids = [...selectedRef.current];
-    if (ids.length < 2) return;
-    const byId = new Map(imagesRef.current.map((image) => [image.id, image]));
-    const captions = ids.map((id) => byId.get(id)?.caption ?? "");
-    const focusCaption = selectedRef.current.has(focusRef.current ?? "")
-      ? byId.get(focusRef.current ?? "")?.caption ?? captions[0] ?? ""
-      : captions[0] ?? "";
-    const nextShared = moveItem(tagLedger(captions, focusCaption).shared, from, to);
-    const next = imagesRef.current.map((image) =>
-      selectedRef.current.has(image.id)
-        ? { ...image, caption: applySharedOrder(image.caption, nextShared) }
-        : image,
-    );
-    commit(next);
-    const moved = nextShared[to];
-    if (moved) queueFocus(`[data-shared="${CSS.escape(moved)}"]`);
-  }
-
   function reorderSingle(from: number, to: number) {
     const id = [...selectedRef.current][0];
     if (!id) return;
@@ -537,7 +508,11 @@ export default function App() {
       setAnchorId(id);
     }
     setSelected(next);
-    setFocusId(id);
+    if (next.has(id)) setFocusId(id);
+    else if (!focusRef.current || !next.has(focusRef.current)) {
+      const ids = [...next];
+      setFocusId(ids[ids.length - 1] ?? null);
+    }
   }
 
   function zoomImage(id: string) {
@@ -830,8 +805,6 @@ export default function App() {
           selected={selected}
           focus={focus}
           showSidecar={settings.showSidecar}
-          coloredTags={settings.coloredTags}
-          colorRules={settings.colorRules}
           references={referenceIds.flatMap((id) => {
             const image = images.find((item) => item.id === id);
             return image ? [image] : [];
@@ -841,7 +814,6 @@ export default function App() {
           error={error}
           onAddTag={addTag}
           onRemoveTag={removeTag}
-          onReorderShared={reorderShared}
           onReorderSingle={reorderSingle}
           onRemoveChip={removeChip}
           onAddReference={addReference}
@@ -857,7 +829,7 @@ export default function App() {
           onImageMenu={openImageMenu}
           hasTags={hasTags}
           onFilterTag={filterByTag}
-          onCopyTag={(tag) => void copyText(tag)}
+          onCopyTag={(tag) => void copyText(joinTags([tag]))}
           zoomed={zoomed}
           onZoom={() => setZoomed(true)}
           onCloseZoom={() => setZoomed(false)}
@@ -874,7 +846,7 @@ export default function App() {
       )}
       <datalist id="vocab">
         {vocab.map((tag) => (
-          <option key={tag} value={pretty(tag)} />
+          <option key={tag} value={tag} />
         ))}
       </datalist>
       {menuImage && imageMenu && (
@@ -896,7 +868,7 @@ export default function App() {
             void revealImage(path).catch((err) => setError(errorMessage(err)));
           }}
           onCopyTags={() => {
-            const caption = menuImage.caption;
+            const caption = joinTags(parseTags(menuImage.caption));
             setImageMenu(null);
             void copyText(caption);
           }}

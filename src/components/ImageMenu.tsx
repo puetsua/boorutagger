@@ -1,5 +1,4 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { pretty } from "../tags";
 import type { ImageItem } from "../types";
 
 const INVALID_NAME = /[\\/:*?"<>|]/;
@@ -95,11 +94,13 @@ type TagMenuProps = {
   onWithout: () => void;
   onOnly: () => void;
   onCopy: () => void;
+  onApply?: () => void;
+  onRemove?: () => void;
 };
 
-export function TagMenu({ x, y, tag, onClose, onHas, onWithout, onOnly, onCopy }: TagMenuProps) {
+export function TagMenu({ x, y, tag, onClose, onHas, onWithout, onOnly, onCopy, onApply, onRemove }: TagMenuProps) {
   const ref = useAnchoredMenu(x, y, onClose);
-  const name = pretty(tag);
+  const name = tag;
 
   return (
     <div ref={ref} className="menu" role="menu" aria-label={name} style={{ left: x, top: y }}>
@@ -112,6 +113,21 @@ export function TagMenu({ x, y, tag, onClose, onHas, onWithout, onOnly, onCopy }
       <button type="button" role="menuitem" onClick={onOnly}>
         Only this tag
       </button>
+      {(onApply || onRemove) && (
+        <>
+          <hr />
+          {onApply && (
+            <button type="button" role="menuitem" onClick={onApply}>
+              Apply to selected
+            </button>
+          )}
+          {onRemove && (
+            <button className="warn" type="button" role="menuitem" onClick={onRemove}>
+              Remove from selected
+            </button>
+          )}
+        </>
+      )}
       <hr />
       <button type="button" role="menuitem" onClick={onCopy}>
         Copy tag

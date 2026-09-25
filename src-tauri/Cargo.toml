@@ -1,6 +1,6 @@
 [package]
 name = "boorutagger"
-version = "0.1.0"
+version = "0.2.0"
 description = "Caption image datasets for LoRA training"
 authors = ["you"]
 license = "MIT"

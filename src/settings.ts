@@ -1,4 +1,4 @@
-import { clampCount, DEFAULT_COLORED_TAGS, normTag } from "./tags";
+import { clampCount, normTag } from "./tags";
 
 export const LAST_FOLDER_KEY = "boorutagger-folder";
 const MAX_FOLDERS = 30;
@@ -12,17 +12,11 @@ export const GALLERY_VIEWS = ["masonry", "tile", "list"] as const;
 
 export type GalleryView = (typeof GALLERY_VIEWS)[number];
 
-const MAX_COLORED_TAGS = 80;
-const MAX_COLOR_RULES = 20;
-const MAX_RULE_LENGTH = 80;
-
 export type Settings = {
   showSidecar: boolean;
   galleryView: GalleryView;
   recentCount: number;
   recent: string[];
-  coloredTags: string[];
-  colorRules: string[];
 };
 
 export type FolderFilters = {
@@ -48,8 +42,6 @@ export const DEFAULT_SETTINGS: Settings = {
   galleryView: "masonry",
   recentCount: 8,
   recent: [],
-  coloredTags: [...DEFAULT_COLORED_TAGS],
-  colorRules: [],
 };
 
 export function parseGalleryView(value: unknown): GalleryView {
@@ -64,38 +56,7 @@ export function parseSettings(raw: unknown): Settings {
     galleryView: parseGalleryView(parsed.galleryView),
     recentCount: clampCount(parsed.recentCount ?? DEFAULT_SETTINGS.recentCount),
     recent: cleanTagList(parsed.recent, 20),
-    coloredTags: parseColoredTags(parsed.coloredTags),
-    colorRules: parseColorRules(parsed.colorRules),
   };
-}
-
-export function parseColorRules(raw: unknown): string[] {
-  if (!Array.isArray(raw)) return [];
-  const seen = new Set<string>();
-  const rules: string[] = [];
-  for (const item of raw) {
-    if (typeof item !== "string") continue;
-    const rule = item.trim();
-    if (!rule || rule.length > MAX_RULE_LENGTH || seen.has(rule) || !validRule(rule)) continue;
-    seen.add(rule);
-    rules.push(rule);
-    if (rules.length === MAX_COLOR_RULES) break;
-  }
-  return rules;
-}
-
-export function validRule(rule: string): boolean {
-  try {
-    new RegExp(rule, "i");
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-export function parseColoredTags(raw: unknown): string[] {
-  if (!Array.isArray(raw)) return [...DEFAULT_COLORED_TAGS];
-  return cleanTagList(raw, MAX_COLORED_TAGS);
 }
 
 export function folderKey(folder: string): string {

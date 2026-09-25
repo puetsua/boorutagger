@@ -1,6 +1,6 @@
 import { useLayoutEffect, useMemo, useRef, useState, type Ref } from "react";
 import type { GalleryView } from "../settings";
-import { needsCaption, parseTags, pretty } from "../tags";
+import { needsCaption, parseTags } from "../tags";
 import type { ImageItem } from "../types";
 
 const MASONRY_GAP = 8;
@@ -108,40 +108,60 @@ export function ImageGrid({
   );
 }
 
-function layoutRows(aspects: readonly number[], containerWidth: number, targetHeight: number, gap: number) {
+function layoutRows(
+  aspects: readonly number[],
+  containerWidth: number,
+  targetHeight: number,
+  maxHeight: number,
+  gap: number,
+) {
   const sizes = aspects.map(() => ({ width: 0, height: 0 }));
   if (containerWidth <= 0 || aspects.length === 0) return sizes;
 
-  const commit = (from: number, to: number) => {
-    const count = to - from;
-    if (count <= 0) return;
-    const gaps = Math.max(0, count - 1) * gap;
+  const rowHeight = (from: number, to: number) => {
+    const gaps = Math.max(0, to - from - 1) * gap;
     const avail = Math.max(1, containerWidth - gaps);
     const sumAspect = aspects.slice(from, to).reduce((sum, aspect) => sum + aspect, 0);
-    const height = avail / sumAspect;
-    let used = 0;
-    for (let index = from; index < to; index++) {
-      const last = index === to - 1;
-      const width = last ? avail - used : Math.max(1, Math.round(aspects[index] * height));
-      sizes[index] = { width, height };
-      used += width;
-    }
+    return avail / sumAspect;
   };
 
-  let start = 0;
+  const breaks = [0];
   let used = 0;
   for (let index = 0; index < aspects.length; index++) {
     const width = aspects[index] * targetHeight;
     const next = used === 0 ? width : used + gap + width;
     if (used > 0 && next > containerWidth) {
-      commit(start, index);
-      start = index;
+      breaks.push(index);
       used = width;
     } else {
       used = next;
     }
   }
-  commit(start, aspects.length);
+  breaks.push(aspects.length);
+
+  // A short last row leaves a gap, so fold it into the row above.
+  if (breaks.length > 2) {
+    const from = breaks[breaks.length - 2];
+    const to = breaks[breaks.length - 1];
+    if (rowHeight(from, to) > maxHeight + 0.5) breaks.splice(breaks.length - 2, 1);
+  }
+
+  for (let row = 0; row < breaks.length - 1; row++) {
+    const from = breaks[row];
+    const to = breaks[row + 1];
+    const raw = rowHeight(from, to);
+    const height = Math.min(raw, maxHeight);
+    const capped = raw > height + 0.5;
+    const gaps = Math.max(0, to - from - 1) * gap;
+    const avail = Math.max(1, containerWidth - gaps);
+    let filled = 0;
+    for (let index = from; index < to; index++) {
+      const last = index === to - 1;
+      const width = !capped && last ? avail - filled : Math.max(1, Math.round(aspects[index] * height));
+      sizes[index] = { width, height };
+      filled += width;
+    }
+  }
   return sizes;
 }
 
@@ -163,28 +183,32 @@ function Masonry({
   onZoom: ImageGridProps["onZoom"];
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const [boxWidth, setBoxWidth] = useState(0);
+  const [frame, setFrame] = useState({ width: 0, height: 0 });
   const [aspects, setAspects] = useState<Record<string, number>>({});
 
   useLayoutEffect(() => {
     const node = ref.current;
     if (!node) return undefined;
-    const update = () => setBoxWidth(node.clientWidth);
+    const update = () => setFrame({ width: node.clientWidth, height: node.parentElement?.clientHeight ?? 0 });
     update();
     const observer = new ResizeObserver(update);
     observer.observe(node);
+    if (node.parentElement) observer.observe(node.parentElement);
     return () => observer.disconnect();
   }, []);
 
+  // A short row stretches to the pane width; keep it within half the gallery.
+  const maxHeight = Math.max(MASONRY_ROW, frame.height / 2);
   const sizes = useMemo(
     () =>
       layoutRows(
         images.map((image) => aspects[image.id] ?? 0.75),
-        boxWidth,
+        frame.width,
         MASONRY_ROW,
+        maxHeight,
         MASONRY_GAP,
       ),
-    [aspects, boxWidth, images],
+    [aspects, frame, images, maxHeight],
   );
 
   function rememberAspect(id: string, aspect: number) {
@@ -243,7 +267,7 @@ function Cell({
 }) {
   const tags = parseTags(image.caption);
   const empty = needsCaption(image.caption);
-  const caption = empty ? "No caption" : tags.map(pretty).join(", ");
+  const caption = empty ? "No caption" : tags.join(", ");
   const overlayName = galleryView === "tile" || galleryView === "masonry";
   const drag = useRef<ThumbDrag | null>(null);
   const suppressClick = useRef(false);
