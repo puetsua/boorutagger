@@ -1,5 +1,7 @@
 # BooruTagger
 
+<img src="src-tauri/icons/128x128.png" alt="BooruTagger icon" width="48" height="48">
+
 Work in progress desktop app for captioning image datasets used in LoRA training. Each image keeps a sidecar `.txt` of comma-separated tags, in the order you set.
 
 ![BooruTagger, with the gallery open and folder tag counts](docs/preview.png)
@@ -8,7 +10,7 @@ Open a folder of images. Filter the working set, select one image or many, and e
 
 ## Install
 
-The Windows installer is published from version tags, starting at [0.1.0](https://github.com/puetsua/boorutagger/releases/tag/0.1.0).
+The Windows installer is published from version tags. The current release is [0.2.1](https://github.com/puetsua/boorutagger/releases/tag/0.2.1).
 
 ## Develop
 

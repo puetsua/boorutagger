@@ -1,3 +1,4 @@
+import mark from "../../src-tauri/icons/32x32.png";
 import { TitleControls } from "./TitleControls";
 import { toggleMaximizeWindow } from "../window";
 
@@ -13,6 +14,7 @@ export function TopBar({ folder, busy, popupOpen, onOpen, onSettings }: TopBarPr
   return (
     <header className="top">
       <div className="brand" data-tauri-drag-region onDoubleClick={toggleMaximizeWindow}>
+        <img className="brand-mark" src={mark} alt="" />
         BooruTagger
       </div>
       <div className="top-actions">

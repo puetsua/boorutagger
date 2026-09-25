@@ -145,6 +145,10 @@ button:disabled { opacity: 0.45; cursor: default; }
   font-weight: 600;
   font-size: 14px;
 }
+.brand-mark {
+  width: 16px;
+  height: 16px;
+}
 .top-actions {
   display: flex;
   align-items: center;
