@@ -1,9 +1,11 @@
+mod config;
 mod dataset;
 
 use std::path::PathBuf;
 use std::sync::Mutex;
 
-use dataset::{check_caption_path, scan_folder, write_caption_file, ScanResult};
+use config::{load_user_config, save_user_config};
+use dataset::{check_caption_path, rename_image, scan_folder, write_caption_file, RenamedImage, ScanResult};
 use serde::Deserialize;
 use tauri::{AppHandle, Manager, State};
 
@@ -22,7 +24,7 @@ fn scan_dataset(app: AppHandle, state: State<OpenFolder>, folder: String) -> Res
         return Err("That folder is not available.".into());
     }
     app.asset_protocol_scope()
-        .allow_directory(&path, false)
+        .allow_directory(&path, true)
         .map_err(|err| format!("Could not show images from that folder. {err}"))?;
     let scan = scan_folder(&path)?;
     *state
@@ -30,6 +32,24 @@ fn scan_dataset(app: AppHandle, state: State<OpenFolder>, folder: String) -> Res
         .lock()
         .map_err(|_| "Could not remember the open folder.".to_string())? = Some(path);
     Ok(scan)
+}
+
+#[tauri::command]
+fn rename_dataset_image(
+    state: State<OpenFolder>,
+    path: String,
+    file_name: String,
+) -> Result<RenamedImage, String> {
+    let folder = {
+        let guard = state
+            .0
+            .lock()
+            .map_err(|_| "Could not check the open folder.".to_string())?;
+        guard
+            .clone()
+            .ok_or_else(|| "Open a folder first.".to_string())?
+    };
+    rename_image(&folder, std::path::Path::new(&path), &file_name)
 }
 
 #[tauri::command]
@@ -57,7 +77,13 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(OpenFolder(Mutex::new(None)))
-        .invoke_handler(tauri::generate_handler![scan_dataset, write_captions])
+        .invoke_handler(tauri::generate_handler![
+            scan_dataset,
+            rename_dataset_image,
+            write_captions,
+            load_user_config,
+            save_user_config
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

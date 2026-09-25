@@ -3,9 +3,20 @@ import type { ImageItem } from "./types";
 const POSES = ["standing", "sitting", "looking_at_viewer", "from_behind"];
 const BACKGROUNDS = ["grey_background", "white_background", "simple_background"];
 const PLATES = ["#243044", "#3a2a28", "#1e3340", "#2c3140", "#3a3328", "#1b2836"];
+const RATIOS: [number, number][] = [
+  [3, 4],
+  [1, 1],
+  [4, 3],
+  [2, 3],
+  [16, 9],
+  [3, 2],
+];
 
 function plate(n: number): string {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 3 4"><rect width="3" height="4" fill="${PLATES[n % PLATES.length]}"/><rect x="0.85" y="1.55" width="1.3" height="1.9" fill="#c4492c"/></svg>`;
+  const [w, h] = RATIOS[n % RATIOS.length];
+  const insetX = w * 0.28;
+  const insetY = h * 0.38;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}"><rect width="${w}" height="${h}" fill="${PLATES[n % PLATES.length]}"/><rect x="${insetX}" y="${insetY}" width="${w - insetX * 2}" height="${h - insetY * 2}" fill="#c4492c"/></svg>`;
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 

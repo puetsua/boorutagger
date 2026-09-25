@@ -67,14 +67,14 @@ export function WorkingSet({
         aria-pressed={activePreset === "empty"}
         onClick={() => onPreset("empty")}
       >
-        Needs caption<span>{emptyCount}</span>
+        Untagged<span>{emptyCount}</span>
       </button>
       <div className="kicker">Has tag</div>
       <FilterChips tags={hasTags} kind="has" onRemove={onRemoveFilter} />
       <input
         type="text"
         list="vocab"
-        placeholder="Add a tag filter"
+        placeholder="Add a tag to filter images"
         spellCheck={false}
         autoComplete="off"
         value={hasDraft}
@@ -91,7 +91,7 @@ export function WorkingSet({
       <input
         type="text"
         list="vocab"
-        placeholder="Add a tag filter"
+        placeholder="Add a tag to filter images"
         spellCheck={false}
         autoComplete="off"
         value={missDraft}

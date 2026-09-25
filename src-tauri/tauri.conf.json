@@ -16,7 +16,11 @@
         "width": 1280,
         "height": 820,
         "minWidth": 960,
-        "minHeight": 640
+        "minHeight": 640,
+        "decorations": false,
+        "resizable": true,
+        "shadow": true,
+        "backgroundColor": "#0f0b14"
       }
     ],
     "security": {

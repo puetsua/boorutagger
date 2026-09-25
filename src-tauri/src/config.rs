@@ -1,0 +1,280 @@
+use std::collections::{HashMap, HashSet};
+use std::fs;
+use std::path::{Path, PathBuf};
+
+use serde::{Deserialize, Serialize};
+
+const CONFIG_DIR: &str = ".boorutagger";
+const CONFIG_FILE: &str = "config.json";
+const MAX_COUNT: u32 = 20;
+const DEFAULT_COUNT: u32 = 8;
+const MAX_FOLDERS: usize = 30;
+const MAX_FILTER_TAGS: usize = 40;
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct FolderFilters {
+    #[serde(default)]
+    pub has_tags: Vec<String>,
+    #[serde(default)]
+    pub missing_tags: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UserConfig {
+    #[serde(default)]
+    pub show_sidecar: bool,
+    #[serde(default = "default_gallery_view")]
+    pub gallery_view: String,
+    #[serde(default = "default_count")]
+    pub frequent_count: u32,
+    #[serde(default = "default_count")]
+    pub recent_count: u32,
+    #[serde(default)]
+    pub recent: Vec<String>,
+    #[serde(default)]
+    pub last_folder: Option<String>,
+    #[serde(default)]
+    pub folder_filters: HashMap<String, FolderFilters>,
+}
+
+impl Default for UserConfig {
+    fn default() -> Self {
+        Self {
+            show_sidecar: false,
+            gallery_view: default_gallery_view(),
+            frequent_count: DEFAULT_COUNT,
+            recent_count: DEFAULT_COUNT,
+            recent: Vec::new(),
+            last_folder: None,
+            folder_filters: HashMap::new(),
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConfigLoad {
+    pub config: UserConfig,
+    pub exists: bool,
+}
+
+fn default_count() -> u32 {
+    DEFAULT_COUNT
+}
+
+fn default_gallery_view() -> String {
+    "masonry".into()
+}
+
+pub fn config_path() -> Result<PathBuf, String> {
+    Ok(home_dir()?.join(CONFIG_DIR).join(CONFIG_FILE))
+}
+
+fn home_dir() -> Result<PathBuf, String> {
+    #[cfg(windows)]
+    {
+        std::env::var_os("USERPROFILE")
+            .map(PathBuf::from)
+            .ok_or_else(|| "Could not find the home folder.".into())
+    }
+    #[cfg(not(windows))]
+    {
+        std::env::var_os("HOME")
+            .map(PathBuf::from)
+            .ok_or_else(|| "Could not find the home folder.".into())
+    }
+}
+
+pub fn load_from(path: &Path) -> Result<UserConfig, String> {
+    if !path.is_file() {
+        return Ok(UserConfig::default());
+    }
+    let raw = fs::read_to_string(path)
+        .map_err(|err| format!("Could not read {}. {err}", path.display()))?;
+    let parsed: UserConfig = serde_json::from_str(&raw)
+        .map_err(|err| format!("Could not parse {}. {err}", path.display()))?;
+    Ok(normalize(parsed))
+}
+
+pub fn save_to(path: &Path, config: &UserConfig) -> Result<(), String> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|err| format!("Could not create {}. {err}", parent.display()))?;
+    }
+    let body = serde_json::to_string_pretty(&normalize(config.clone()))
+        .map_err(|err| format!("Could not write config. {err}"))?;
+    fs::write(path, format!("{body}\n"))
+        .map_err(|err| format!("Could not write {}. {err}", path.display()))
+}
+
+fn normalize(mut config: UserConfig) -> UserConfig {
+    config.frequent_count = config.frequent_count.min(MAX_COUNT);
+    config.recent_count = config.recent_count.min(MAX_COUNT);
+    config.recent.retain(|tag| !tag.is_empty());
+    config.recent.truncate(20);
+    config.gallery_view = match config.gallery_view.as_str() {
+        "grid" => default_gallery_view(),
+        "tile" | "list" | "masonry" => config.gallery_view,
+        _ => default_gallery_view(),
+    };
+    if config
+        .last_folder
+        .as_ref()
+        .is_some_and(|folder| folder.trim().is_empty())
+    {
+        config.last_folder = None;
+    }
+    config.folder_filters = clean_folder_filters(config.folder_filters);
+    config
+}
+
+fn clean_folder_filters(filters: HashMap<String, FolderFilters>) -> HashMap<String, FolderFilters> {
+    let mut cleaned = HashMap::new();
+    for (folder, value) in filters {
+        let key = folder_key(&folder);
+        if key.is_empty() {
+            continue;
+        }
+        cleaned.insert(
+            key,
+            FolderFilters {
+                has_tags: clean_tags(value.has_tags),
+                missing_tags: clean_tags(value.missing_tags),
+            },
+        );
+        if cleaned.len() == MAX_FOLDERS {
+            break;
+        }
+    }
+    cleaned
+}
+
+fn folder_key(folder: &str) -> String {
+    let trimmed = folder.trim().trim_end_matches(['\\', '/']);
+    let windows = trimmed.contains('\\') || trimmed.as_bytes().get(1) == Some(&b':');
+    if windows {
+        trimmed.to_lowercase()
+    } else {
+        trimmed.to_string()
+    }
+}
+
+fn clean_tags(tags: Vec<String>) -> Vec<String> {
+    let mut seen = HashSet::new();
+    let mut out = Vec::new();
+    for tag in tags {
+        let tag = tag
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join("_")
+            .replace(',', "")
+            .to_lowercase();
+        if tag.is_empty() || !seen.insert(tag.clone()) {
+            continue;
+        }
+        out.push(tag);
+        if out.len() == MAX_FILTER_TAGS {
+            break;
+        }
+    }
+    out
+}
+
+#[tauri::command]
+pub fn load_user_config() -> Result<ConfigLoad, String> {
+    let path = config_path()?;
+    Ok(ConfigLoad {
+        exists: path.is_file(),
+        config: load_from(&path)?,
+    })
+}
+
+#[tauri::command]
+pub fn save_user_config(config: UserConfig) -> Result<(), String> {
+    save_to(&config_path()?, &config)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn temp_path(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "boorutagger-config-{name}-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dir.join(CONFIG_FILE)
+    }
+
+    #[test]
+    fn missing_file_returns_defaults() {
+        let path = temp_path("missing");
+        let loaded = load_from(&path).unwrap();
+        assert!(!loaded.show_sidecar);
+        assert_eq!(loaded.frequent_count, 8);
+        assert!(loaded.last_folder.is_none());
+        let _ = fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn writes_and_reads_config() {
+        let path = temp_path("roundtrip");
+        let config = UserConfig {
+            show_sidecar: true,
+            gallery_view: "tile".into(),
+            frequent_count: 12,
+            recent_count: 4,
+            recent: vec!["1girl".into(), "solo".into()],
+            last_folder: Some(r"D:\data\set".into()),
+            folder_filters: HashMap::from([(
+                r"D:\data\set\".into(),
+                FolderFilters {
+                    has_tags: vec!["1girl".into(), "blue hair".into()],
+                    missing_tags: vec!["solo".into()],
+                },
+            )]),
+        };
+        save_to(&path, &config).unwrap();
+        let loaded = load_from(&path).unwrap();
+        assert!(loaded.show_sidecar);
+        assert_eq!(loaded.gallery_view, "tile");
+        assert_eq!(loaded.frequent_count, 12);
+        assert_eq!(loaded.recent_count, 4);
+        assert_eq!(loaded.recent, ["1girl", "solo"]);
+        assert_eq!(loaded.last_folder.as_deref(), Some(r"D:\data\set"));
+        assert_eq!(
+            loaded.folder_filters.get(r"d:\data\set"),
+            Some(&FolderFilters {
+                has_tags: vec!["1girl".into(), "blue_hair".into()],
+                missing_tags: vec!["solo".into()],
+            })
+        );
+        let _ = fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn clamps_counts_and_drops_empty_folder() {
+        let path = temp_path("clamp");
+        let config = UserConfig {
+            show_sidecar: false,
+            gallery_view: "cards".into(),
+            frequent_count: 99,
+            recent_count: 99,
+            recent: vec!["".into(), "tag".into()],
+            last_folder: Some("   ".into()),
+            folder_filters: HashMap::new(),
+        };
+        save_to(&path, &config).unwrap();
+        let loaded = load_from(&path).unwrap();
+        assert_eq!(loaded.gallery_view, "masonry");
+        assert_eq!(loaded.frequent_count, 20);
+        assert_eq!(loaded.recent_count, 20);
+        assert_eq!(loaded.recent, ["tag"]);
+        assert!(loaded.last_folder.is_none());
+        let _ = fs::remove_dir_all(path.parent().unwrap());
+    }
+}

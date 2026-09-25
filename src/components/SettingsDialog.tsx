@@ -1,6 +1,12 @@
 import { useEffect, useRef } from "react";
-import { THEMES, type Settings } from "../settings";
+import { GALLERY_VIEWS, type GalleryView, type Settings } from "../settings";
 import { clampCount } from "../tags";
+
+const VIEW_LABELS: Record<GalleryView, string> = {
+  masonry: "Masonry",
+  tile: "Tile",
+  list: "List",
+};
 
 type SettingsDialogProps = {
   open: boolean;
@@ -39,24 +45,25 @@ export function SettingsDialog({ open, settings, onClose, onChange }: SettingsDi
           Show sidecar text
         </label>
         <p className="hint-line sidecar-help">The caption file in the right panel.</p>
-        <div className="setting">
-          Theme
-          <p>Fluent 2 dark, five purple brands.</p>
-          <div className="theme-grid">
-            {THEMES.map((theme) => (
+        <fieldset className="setting choices">
+          <legend>Gallery view</legend>
+          <p>How images are shown in the middle pane.</p>
+          <div className="view-picks" role="radiogroup" aria-label="Gallery view">
+            {GALLERY_VIEWS.map((view) => (
               <button
-                key={theme.id}
+                key={view}
                 type="button"
-                className="theme-swatch"
-                aria-pressed={settings.theme === theme.id}
-                onClick={() => onChange({ ...settings, theme: theme.id })}
+                className="view-pick"
+                role="radio"
+                aria-checked={settings.galleryView === view}
+                onClick={() => onChange({ ...settings, galleryView: view })}
               >
-                <i style={{ background: theme.swatch }} />
-                {theme.name}
+                <ViewPreview view={view} />
+                {VIEW_LABELS[view]}
               </button>
             ))}
           </div>
-        </div>
+        </fieldset>
         <label className="setting">
           Frequently used tags
           <p>How many of the most common tags to show. 0 hides the list.</p>
@@ -84,5 +91,51 @@ export function SettingsDialog({ open, settings, onClose, onChange }: SettingsDi
         </button>
       </form>
     </dialog>
+  );
+}
+
+function ViewPreview({ view }: { view: GalleryView }) {
+  return (
+    <span className={`view-preview view-preview-${view}`} aria-hidden="true">
+      {view === "masonry" && (
+        <>
+          <span className="vp-row">
+            <span className="vp-block wide" />
+            <span className="vp-block" />
+            <span className="vp-block mid" />
+          </span>
+          <span className="vp-row">
+            <span className="vp-block mid" />
+            <span className="vp-block wide" />
+          </span>
+        </>
+      )}
+      {view === "tile" && (
+        <>
+          <span className="vp-block" />
+          <span className="vp-block" />
+          <span className="vp-block" />
+          <span className="vp-block" />
+          <span className="vp-block" />
+          <span className="vp-block" />
+        </>
+      )}
+      {view === "list" && (
+        <>
+          <span className="vp-row">
+            <span className="vp-sq" />
+            <span className="vp-line" />
+          </span>
+          <span className="vp-row">
+            <span className="vp-sq" />
+            <span className="vp-line" />
+          </span>
+          <span className="vp-row">
+            <span className="vp-sq" />
+            <span className="vp-line" />
+          </span>
+        </>
+      )}
+    </span>
   );
 }

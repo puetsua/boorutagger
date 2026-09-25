@@ -45,7 +45,15 @@ export function normTag(raw: string): string {
 }
 
 export function parseTags(text: string): string[] {
-  return text.split(",").map((tag) => tag.trim()).filter(Boolean);
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const part of text.split(",")) {
+    const tag = normTag(part);
+    if (!tag || seen.has(tag)) continue;
+    seen.add(tag);
+    out.push(tag);
+  }
+  return out;
 }
 
 export function joinTags(tags: readonly string[]): string {
