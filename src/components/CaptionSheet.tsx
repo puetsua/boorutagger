@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState, type DragEvent as ReactDragEvent, type KeyboardEvent, type PointerEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent, type KeyboardEvent, type PointerEvent } from "react";
+import { TagMenu } from "./ImageMenu";
 import {
   categoryOf,
+  compileColorRules,
   needsCaption,
   parseTags,
   pretty,
@@ -10,11 +12,15 @@ import {
 } from "../tags";
 import { GALLERY_DRAG_TYPE, type ImageItem } from "../types";
 
+type TagFilterKind = "has" | "missing" | "only";
+
 type CaptionSheetProps = {
   images: readonly ImageItem[];
   selected: ReadonlySet<string>;
   focus: ImageItem | null;
   showSidecar: boolean;
+  coloredTags: readonly string[];
+  colorRules: readonly string[];
   references: readonly ImageItem[];
   recentCount: number;
   recent: readonly string[];
@@ -30,6 +36,9 @@ type CaptionSheetProps = {
   onCaptionFocus: () => void;
   onCaptionBlur: () => void;
   onImageMenu: (id: string, x: number, y: number) => void;
+  hasTags: readonly string[];
+  onFilterTag: (kind: TagFilterKind, tag: string) => void;
+  onCopyTag: (tag: string) => void;
   zoomed: boolean;
   onZoom: () => void;
   onCloseZoom: () => void;
@@ -40,6 +49,8 @@ export function CaptionSheet({
   selected,
   focus,
   showSidecar,
+  coloredTags,
+  colorRules,
   references,
   recentCount,
   recent,
@@ -55,6 +66,9 @@ export function CaptionSheet({
   onCaptionFocus,
   onCaptionBlur,
   onImageMenu,
+  hasTags,
+  onFilterTag,
+  onCopyTag,
   zoomed,
   onZoom,
   onCloseZoom,
@@ -69,53 +83,61 @@ export function CaptionSheet({
 
   const [recentOpen, setRecentOpen] = useState(true);
   const zoomRef = useRef<HTMLDialogElement>(null);
+  const colored = useMemo(() => new Set(coloredTags), [coloredTags]);
+  const rules = useMemo(() => compileColorRules(colorRules), [colorRules]);
+  const meta = (tag: string) => categoryOf(tag, colored, rules) === "meta";
   const recentTags = recent.slice(0, recentCount);
   const referenceTags = referenceTagList(references);
 
   useEffect(() => {
-    if (!focus && zoomed) onCloseZoom();
-  }, [focus, zoomed, onCloseZoom]);
+    if ((!focus || count === 0) && zoomed) onCloseZoom();
+  }, [focus, count, zoomed, onCloseZoom]);
 
   useEffect(() => {
     const dialog = zoomRef.current;
     if (!dialog) return;
-    if (zoomed && focus && !dialog.open) dialog.showModal();
+    if (zoomed && focus && !dialog.open) dialog.show();
     if (!zoomed && dialog.open) dialog.close();
   }, [zoomed, focus]);
 
+  useEffect(() => {
+    if (!zoomed) return undefined;
+    function onKey(event: globalThis.KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      onCloseZoom();
+    }
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
+  }, [zoomed, onCloseZoom]);
+
   return (
     <aside className="sheet" aria-label="Edit captions">
+      {count > 0 && focus && (
       <div
-        className={focus ? "preview" : "preview empty"}
-        onContextMenu={
-          focus
-            ? (event) => {
-                event.preventDefault();
-                onImageMenu(focus.id, event.clientX, event.clientY);
-              }
-            : undefined
-        }
+        className="preview"
+        onContextMenu={(event) => {
+          event.preventDefault();
+          onImageMenu(focus.id, event.clientX, event.clientY);
+        }}
       >
-        {focus ? (
-          <>
-            <button
-              type="button"
-              className="thumb"
-              aria-label={`Zoom ${focus.name}`}
-              onClick={onZoom}
-            >
-              <img src={focus.src} alt="" />
-            </button>
-            <div>
-              <div className="name" title={focus.path}>{focus.name}</div>
-              <div className="who">{who}</div>
-            </div>
-          </>
-        ) : (
-          <div className="who">No image</div>
-        )}
+        <button
+          type="button"
+          className="thumb"
+          aria-label={`Zoom ${focus.name}`}
+          onClick={onZoom}
+        >
+          <img src={focus.src} alt="" />
+        </button>
+        <div>
+          <div className="name" title={focus.path}>{focus.name}</div>
+          <div className="who">{who}</div>
+        </div>
       </div>
-      {focus && (
+      )}
+      {count > 0 && focus && zoomed && <div className="scrim zoom-scrim" />}
+      {count > 0 && focus && (
         <dialog
           ref={zoomRef}
           className="zoom"
@@ -124,10 +146,6 @@ export function CaptionSheet({
             if (event.target === event.currentTarget) onCloseZoom();
           }}
           onClose={onCloseZoom}
-          onCancel={(event) => {
-            event.preventDefault();
-            onCloseZoom();
-          }}
         >
           <button
             type="button"
@@ -150,7 +168,13 @@ export function CaptionSheet({
           </p>
         )}
         {count === 0 ? (
-          <FolderStats images={images} />
+          <FolderStats
+            images={images}
+            hasTags={hasTags}
+            isMeta={meta}
+            onFilterTag={onFilterTag}
+            onCopyTag={onCopyTag}
+          />
         ) : (
           <>
         {ledger && (
@@ -165,11 +189,13 @@ export function CaptionSheet({
                 {ledger.shared.map((tag, index) => (
                   <div
                     key={tag}
-                    className="trow"
+                    className={meta(tag) ? "trow" : "trow plain"}
                     data-shared={tag}
                     {...reorderHandlers(index, ledger.shared.length, false, onReorderShared)}
                   >
-                    <i className="swatch" style={{ background: TAG_COLORS[categoryOf(tag)] }} />
+                    {meta(tag) && (
+                      <i className="swatch" style={{ background: TAG_COLORS.meta }} />
+                    )}
                     <span className="tagname">{pretty(tag)}</span>
                     <span className="tagops">
                       <span className="frac">
@@ -188,8 +214,10 @@ export function CaptionSheet({
               <>
                 <div className="section">On some</div>
                 {ledger.partial.map(({ tag, count: have }) => (
-                  <div className="trow" key={tag}>
-                    <i className="swatch" style={{ background: TAG_COLORS[categoryOf(tag)] }} />
+                  <div className={meta(tag) ? "trow" : "trow plain"} key={tag}>
+                    {meta(tag) && (
+                      <i className="swatch" style={{ background: TAG_COLORS.meta }} />
+                    )}
                     <span className="tagname">{pretty(tag)}</span>
                     <span className="tagops">
                       <span className="frac">
@@ -223,7 +251,9 @@ export function CaptionSheet({
                       data-chip={String(index)}
                       {...reorderHandlers(index, singleTags.length, true, onReorderSingle)}
                     >
-                      <i className="swatch" style={{ background: TAG_COLORS[categoryOf(tag)] }} />
+                      {meta(tag) && (
+                      <i className="swatch" style={{ background: TAG_COLORS.meta }} />
+                    )}
                       <span className="tag">{pretty(tag)}</span>
                       <button type="button" aria-label={`Remove ${pretty(tag)}`} onClick={() => onRemoveChip(index)}>
                         ×
@@ -410,15 +440,26 @@ function References({
   );
 }
 
-function FolderStats({ images }: { images: readonly ImageItem[] }) {
+function FolderStats({
+  images,
+  hasTags,
+  isMeta,
+  onFilterTag,
+  onCopyTag,
+}: {
+  images: readonly ImageItem[];
+  hasTags: readonly string[];
+  isMeta: (tag: string) => boolean;
+  onFilterTag: (kind: TagFilterKind, tag: string) => void;
+  onCopyTag: (tag: string) => void;
+}) {
+  const [menu, setMenu] = useState<{ tag: string; x: number; y: number } | null>(null);
   let captioned = 0;
-  let tagSum = 0;
   const tagCounts = new Map<string, number>();
   const folders = new Set<string>();
   for (const image of images) {
     const tags = parseTags(image.caption);
     if (!needsCaption(image.caption)) captioned += 1;
-    tagSum += tags.length;
     for (const tag of new Set(tags)) tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1);
     const slash = image.name.lastIndexOf("/");
     if (slash > 0) folders.add(image.name.slice(0, slash));
@@ -426,11 +467,7 @@ function FolderStats({ images }: { images: readonly ImageItem[] }) {
   const total = images.length;
   const empty = total - captioned;
   const unique = tagCounts.size;
-  const avg = total ? tagSum / total : 0;
-  const avgLabel = Number.isInteger(avg) ? String(avg) : avg.toFixed(1);
-  const top = [...tagCounts.entries()]
-    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-    .slice(0, 10);
+  const tags = [...tagCounts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
 
   return (
     <div>
@@ -457,21 +494,52 @@ function FolderStats({ images }: { images: readonly ImageItem[] }) {
         <span>Unique tags</span>
         <span>{unique}</span>
       </div>
-      <div className="stat">
-        <span>Tags per image</span>
-        <span>{avgLabel}</span>
-      </div>
-      {top.length > 0 && (
-        <div className="tag-block">
-          <h2>Most used tags</h2>
-          {top.map(([tag, have]) => (
-            <div className="trow" key={tag}>
-              <i className="swatch" style={{ background: TAG_COLORS[categoryOf(tag)] }} />
-              <span className="tagname">{pretty(tag)}</span>
-              <span className="frac">{have}</span>
-            </div>
+      {tags.length > 0 && (
+        <div className="tag-badges" aria-label="Tag counts">
+          {tags.map(([tag, have]) => (
+            <button
+              key={tag}
+              type="button"
+              className="tag-badge"
+              aria-pressed={hasTags.includes(tag)}
+              onClick={() => onFilterTag("has", tag)}
+              onContextMenu={(event) => {
+                event.preventDefault();
+                setMenu({ tag, x: event.clientX, y: event.clientY });
+              }}
+            >
+              {isMeta(tag) && (
+                <i className="swatch" style={{ background: TAG_COLORS.meta }} />
+              )}
+              <span>{pretty(tag)}</span>
+              {have > 1 && <span className="n">{have}</span>}
+            </button>
           ))}
         </div>
+      )}
+      {menu && (
+        <TagMenu
+          x={menu.x}
+          y={menu.y}
+          tag={menu.tag}
+          onClose={() => setMenu(null)}
+          onHas={() => {
+            onFilterTag("has", menu.tag);
+            setMenu(null);
+          }}
+          onWithout={() => {
+            onFilterTag("missing", menu.tag);
+            setMenu(null);
+          }}
+          onOnly={() => {
+            onFilterTag("only", menu.tag);
+            setMenu(null);
+          }}
+          onCopy={() => {
+            onCopyTag(menu.tag);
+            setMenu(null);
+          }}
+        />
       )}
     </div>
   );

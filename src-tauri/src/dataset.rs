@@ -239,6 +239,16 @@ fn trim_trailing_newlines(mut text: String) -> String {
     text
 }
 
+pub(crate) fn path_changes_dataset(path: &Path) -> bool {
+    if is_hidden(path) {
+        return false;
+    }
+    match path.extension().and_then(|ext| ext.to_str()) {
+        Some(ext) if !is_image_ext(ext) && !ext.eq_ignore_ascii_case("txt") => false,
+        _ => true,
+    }
+}
+
 fn is_image_ext(ext: &str) -> bool {
     IMAGE_EXTENSIONS
         .iter()
@@ -382,6 +392,15 @@ mod tests {
         let again = scan_folder(&dir).unwrap();
         assert_eq!(again.images[1].caption, "solo");
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn watches_images_and_folders_not_sidecars() {
+        assert!(path_changes_dataset(Path::new("dataset/photo.PNG")));
+        assert!(path_changes_dataset(Path::new("dataset/body")));
+        assert!(path_changes_dataset(Path::new("dataset/photo.txt")));
+        assert!(!path_changes_dataset(Path::new("dataset/notes.md")));
+        assert!(!path_changes_dataset(Path::new("dataset/.hidden.png")));
     }
 
     #[test]

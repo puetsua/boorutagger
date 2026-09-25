@@ -61,5 +61,7 @@ export function useCaptionSaver(setError: (message: string) => void) {
     };
   }, [flush]);
 
-  return { saveSoon, saveNow, flush };
+  const pendingCaption = useCallback((path: string) => pending.current.has(path), []);
+
+  return { saveSoon, saveNow, flush, pendingCaption };
 }

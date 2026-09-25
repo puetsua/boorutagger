@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { pretty } from "../tags";
 import type { ImageItem } from "../types";
 
 const INVALID_NAME = /[\\/:*?"<>|]/;
@@ -53,40 +54,7 @@ export function ImageMenu({
   onCopyPath,
   onAddReference,
 }: ImageMenuProps) {
-  const ref = useRef<HTMLDivElement>(null);
-
-  useLayoutEffect(() => {
-    const menu = ref.current;
-    if (!menu) return;
-    const box = menu.getBoundingClientRect();
-    menu.style.left = `${Math.max(8, Math.min(x, window.innerWidth - box.width - 8))}px`;
-    menu.style.top = `${Math.max(8, Math.min(y, window.innerHeight - box.height - 8))}px`;
-  }, [x, y]);
-
-  useEffect(() => {
-    function onKey(event: KeyboardEvent) {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      event.stopPropagation();
-      onClose();
-    }
-    function onPointer(event: MouseEvent) {
-      if (ref.current?.contains(event.target as Node)) return;
-      onClose();
-    }
-    function onScroll() {
-      onClose();
-    }
-    document.addEventListener("keydown", onKey, true);
-    document.addEventListener("mousedown", onPointer);
-    document.addEventListener("scroll", onScroll, true);
-    return () => {
-      document.removeEventListener("keydown", onKey, true);
-      document.removeEventListener("mousedown", onPointer);
-      document.removeEventListener("scroll", onScroll, true);
-    };
-  }, [onClose]);
-
+  const ref = useAnchoredMenu(x, y, onClose);
   const pasteLabel = selectedCount > 1 ? `Paste tags on ${selectedCount} images` : "Paste tags";
 
   return (
@@ -118,6 +86,79 @@ export function ImageMenu({
   );
 }
 
+type TagMenuProps = {
+  x: number;
+  y: number;
+  tag: string;
+  onClose: () => void;
+  onHas: () => void;
+  onWithout: () => void;
+  onOnly: () => void;
+  onCopy: () => void;
+};
+
+export function TagMenu({ x, y, tag, onClose, onHas, onWithout, onOnly, onCopy }: TagMenuProps) {
+  const ref = useAnchoredMenu(x, y, onClose);
+  const name = pretty(tag);
+
+  return (
+    <div ref={ref} className="menu" role="menu" aria-label={name} style={{ left: x, top: y }}>
+      <button type="button" role="menuitem" onClick={onHas}>
+        Has tag
+      </button>
+      <button type="button" role="menuitem" onClick={onWithout}>
+        Without tag
+      </button>
+      <button type="button" role="menuitem" onClick={onOnly}>
+        Only this tag
+      </button>
+      <hr />
+      <button type="button" role="menuitem" onClick={onCopy}>
+        Copy tag
+      </button>
+    </div>
+  );
+}
+
+function useAnchoredMenu(x: number, y: number, onClose: () => void) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    const menu = ref.current;
+    if (!menu) return;
+    const box = menu.getBoundingClientRect();
+    const titlebar = document.querySelector(".top")?.getBoundingClientRect().height ?? 32;
+    menu.style.left = `${Math.max(8, Math.min(x, window.innerWidth - box.width - 8))}px`;
+    menu.style.top = `${Math.max(titlebar, Math.min(y, window.innerHeight - box.height - 8))}px`;
+  }, [x, y]);
+
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      onClose();
+    }
+    function onPointer(event: MouseEvent) {
+      if (ref.current?.contains(event.target as Node)) return;
+      onClose();
+    }
+    function onScroll() {
+      onClose();
+    }
+    document.addEventListener("keydown", onKey, true);
+    document.addEventListener("mousedown", onPointer);
+    document.addEventListener("scroll", onScroll, true);
+    return () => {
+      document.removeEventListener("keydown", onKey, true);
+      document.removeEventListener("mousedown", onPointer);
+      document.removeEventListener("scroll", onScroll, true);
+    };
+  }, [onClose]);
+
+  return ref;
+}
+
 type RenameDialogProps = {
   image: ImageItem;
   onClose: () => void;
@@ -135,22 +176,26 @@ export function RenameDialog({ image, onClose, onSubmit }: RenameDialogProps) {
   useEffect(() => {
     const dialog = dialogRef.current;
     if (!dialog) return;
-    if (!dialog.open) dialog.showModal();
+    if (!dialog.open) dialog.show();
     inputRef.current?.focus();
     inputRef.current?.select();
   }, []);
 
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (event.key !== "Escape" || busy) return;
+      event.preventDefault();
+      event.stopPropagation();
+      onClose();
+    }
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
+  }, [busy, onClose]);
+
   return (
-    <dialog
-      ref={dialogRef}
-      className="rename"
-      aria-label={`Rename ${image.name}`}
-      onClose={onClose}
-      onCancel={(event) => {
-        event.preventDefault();
-        if (!busy) onClose();
-      }}
-    >
+    <>
+    <div className="scrim" />
+    <dialog ref={dialogRef} className="rename" aria-label={`Rename ${image.name}`} onClose={onClose}>
       <form
         method="dialog"
         onSubmit={(event) => {
@@ -205,5 +250,6 @@ export function RenameDialog({ image, onClose, onSubmit }: RenameDialogProps) {
         </div>
       </form>
     </dialog>
+    </>
   );
 }

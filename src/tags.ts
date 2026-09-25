@@ -1,14 +1,16 @@
-export const TAG_COLORS = {
+export const TAG_CATEGORIES = ["character", "copyright", "artist", "general", "meta"] as const;
+
+export type TagCategory = (typeof TAG_CATEGORIES)[number];
+
+export const TAG_COLORS: Record<TagCategory, string> = {
   character: "#1b7a43",
   copyright: "#7a3e9d",
   artist: "#c4492c",
   general: "#3e5c86",
   meta: "#a56b12",
-} as const;
+};
 
-export type TagCategory = keyof typeof TAG_COLORS;
-
-const META = new Set([
+export const DEFAULT_COLORED_TAGS = [
   "simple_background",
   "white_background",
   "grey_background",
@@ -28,11 +30,27 @@ const META = new Set([
   "rating_safe",
   "rating_questionable",
   "rating_explicit",
-]);
+];
 
-export function categoryOf(tag: string): TagCategory {
+export function compileColorRules(patterns: readonly string[]): RegExp[] {
+  const rules: RegExp[] = [];
+  for (const pattern of patterns) {
+    try {
+      rules.push(new RegExp(pattern, "i"));
+    } catch {
+      continue;
+    }
+  }
+  return rules;
+}
+
+export function categoryOf(tag: string, colored: ReadonlySet<string>, rules: readonly RegExp[]): TagCategory {
   const name = tag.toLowerCase();
-  if (name.startsWith("rating_") || name.startsWith("score_") || META.has(name)) return "meta";
+  if (colored.has(name)) return "meta";
+  const label = pretty(name);
+  for (const rule of rules) {
+    if (rule.test(name) || rule.test(label)) return "meta";
+  }
   return "general";
 }
 

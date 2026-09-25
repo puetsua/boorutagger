@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { errorMessage, imageSrc, inTauri, loadUserConfig, pickFolder, renameImage, revealImage, saveUserConfig, scanDataset } from "./api";
+import { listen } from "@tauri-apps/api/event";
+import { errorMessage, imageSrc, inTauri, loadUserConfig, pickFolder, renameImage, revealImage, saveUserConfig, scanDataset, type ScannedImage } from "./api";
 import { CaptionSheet } from "./components/CaptionSheet";
 import { ImageGrid } from "./components/ImageGrid";
 import { fileParts, ImageMenu, RenameDialog } from "./components/ImageMenu";
@@ -12,16 +13,23 @@ import { buildSample } from "./sample";
 import {
   DEFAULT_SETTINGS,
   LAST_FOLDER_KEY,
+  loadFilterPresets,
   loadFolderFilters,
   loadSettings,
   lookupFolderFilters,
+  parseFilterPresets,
   parseFolderFilters,
-  parseGalleryView,
+  parseSettings,
+  presetMatches,
   readLegacyLocal,
   rememberFolderFilters,
+  renameFilterPreset,
+  replaceFilterPreset,
   sameFilterTags,
   saveSettings,
   toUserConfig,
+  upsertFilterPreset,
+  type FilterPreset,
   type FolderFilters,
   type Settings,
 } from "./settings";
@@ -39,6 +47,39 @@ import {
 import type { ImageItem } from "./types";
 import { useCaptionSaver } from "./useCaptionSaver";
 import "./App.css";
+
+function mergeImages(
+  current: readonly ImageItem[],
+  scanned: readonly ScannedImage[],
+  pendingCaption: (path: string) => boolean,
+): ImageItem[] {
+  const byId = new Map(current.map((image) => [image.id, image]));
+  return scanned.map((record) => {
+    const existing = byId.get(record.path);
+    if (!existing) {
+      return {
+        id: record.path,
+        name: record.name,
+        path: record.path,
+        captionPath: record.captionPath,
+        caption: record.caption,
+        src: imageSrc(record.path),
+      };
+    }
+    const caption = pendingCaption(existing.captionPath) ? existing.caption : record.caption;
+    if (existing.name === record.name && existing.captionPath === record.captionPath && existing.caption === caption) {
+      return existing;
+    }
+    return { ...existing, name: record.name, captionPath: record.captionPath, caption };
+  });
+}
+
+function dropMissing(selected: Set<string>, ids: Set<string>): Set<string> {
+  for (const id of selected) {
+    if (!ids.has(id)) return new Set([...selected].filter((item) => ids.has(item)));
+  }
+  return selected;
+}
 
 function countLabel(count: number, singular: string, plural: string) {
   return `${count} ${count === 1 ? singular : plural}`;
@@ -95,6 +136,8 @@ export default function App() {
   const [onlyEmpty, setOnlyEmpty] = useState(false);
   const [hasTags, setHasTags] = useState<string[]>([]);
   const [missingTags, setMissingTags] = useState<string[]>([]);
+  const [filterPresets, setFilterPresets] = useState<FilterPreset[]>(() => (inTauri() ? [] : loadFilterPresets()));
+  const [armedPresetId, setArmedPresetId] = useState("");
   const [error, setError] = useState("");
   const [referenceIds, setReferenceIds] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
@@ -107,6 +150,8 @@ export default function App() {
   const [zoomed, setZoomed] = useState(false);
 
   const imagesRef = useRef(images);
+  const folderRef = useRef<string | null>(null);
+  const refreshTicket = useRef(0);
   const selectedRef = useRef(selected);
   const focusRef = useRef(focusId);
   const visibleRef = useRef<ImageItem[]>([]);
@@ -114,6 +159,7 @@ export default function App() {
   const settingsRef = useRef(settings);
   const lastFolderRef = useRef<string | null>(null);
   const folderFiltersRef = useRef<Record<string, FolderFilters>>(inTauri() ? {} : loadFolderFilters());
+  const filterPresetsRef = useRef(filterPresets);
   const configReadyRef = useRef(!inTauri());
   const captionBefore = useRef("");
   const gridRef = useRef<HTMLDivElement>(null);
@@ -123,8 +169,10 @@ export default function App() {
   focusRef.current = focusId;
   settingsOpenRef.current = settingsOpen;
   settingsRef.current = settings;
+  filterPresetsRef.current = filterPresets;
 
-  const { saveSoon, saveNow, flush } = useCaptionSaver(setError);
+  const { saveSoon, saveNow, flush, pendingCaption } = useCaptionSaver(setError);
+  folderRef.current = folder;
 
   const filters = useMemo(
     () => ({ query, needsCaption: onlyEmpty, hasTags, missingTags }),
@@ -143,6 +191,14 @@ export default function App() {
   const emptyCount = images.length - captioned;
   const filtersPlain = !query.trim() && hasTags.length === 0 && missingTags.length === 0;
   const activePreset = filtersPlain ? (onlyEmpty ? "empty" : "all") : "";
+  const activeSavedId = onlyEmpty
+    ? ""
+    : filterPresets.find((preset) => presetMatches(preset, hasTags, missingTags))?.id ?? "";
+  const armedPreset = filterPresets.find((preset) => preset.id === armedPresetId) ?? null;
+  const overridePreset =
+    armedPreset && !onlyEmpty && (hasTags.length > 0 || missingTags.length > 0) && !presetMatches(armedPreset, hasTags, missingTags)
+      ? armedPreset
+      : null;
   const shownIds = useMemo(() => new Set(visible.map((image) => image.id)), [visible]);
   const hiddenSelected = [...selected].filter((id) => !shownIds.has(id)).length;
   const hiddenNote = !folder
@@ -159,10 +215,11 @@ export default function App() {
 
   const persistConfig = useCallback((next: Settings, lastFolder: string | null) => {
     const folderFilters = folderFiltersRef.current;
-    saveSettings(next, folderFilters);
+    const presets = filterPresetsRef.current;
+    saveSettings(next, folderFilters, presets);
     if (lastFolder) localStorage.setItem(LAST_FOLDER_KEY, lastFolder);
     if (!inTauri()) return;
-    void saveUserConfig(toUserConfig(next, lastFolder, folderFilters)).catch((err) =>
+    void saveUserConfig(toUserConfig(next, lastFolder, folderFilters, presets)).catch((err) =>
       setError(errorMessage(err)),
     );
   }, []);
@@ -187,6 +244,16 @@ export default function App() {
   }, [folder, hasTags, missingTags, persistConfig]);
 
   useEffect(() => {
+    if (!configReadyRef.current) return;
+    filterPresetsRef.current = filterPresets;
+    persistConfig(settingsRef.current, lastFolderRef.current);
+  }, [filterPresets, persistConfig]);
+
+  useEffect(() => {
+    if (activeSavedId) setArmedPresetId(activeSavedId);
+  }, [activeSavedId]);
+
+  useEffect(() => {
     if (!visible.length || !focusId) return;
     if (!visible.some((image) => image.id === focusId)) setFocusId(visible[0].id);
   }, [visible, focusId]);
@@ -200,20 +267,11 @@ export default function App() {
     const saved = lookupFolderFilters(folderFiltersRef.current, nextFolder);
     const restoredHas = saved?.hasTags ?? [];
     const restoredMissing = saved?.missingTags ?? [];
-    const first =
-      nextImages.find((image) =>
-        imageVisible(image.name, image.caption, {
-          query: "",
-          needsCaption: false,
-          hasTags: restoredHas,
-          missingTags: restoredMissing,
-        }),
-      )?.id ?? null;
     setFolder(nextFolder);
     setImages(nextImages);
-    setSelected(first ? new Set([first]) : new Set());
-    setFocusId(first);
-    setAnchorId(first);
+    setSelected(new Set());
+    setFocusId(null);
+    setAnchorId(null);
     setQuery("");
     setOnlyEmpty(false);
     setHasTags(restoredHas);
@@ -262,6 +320,47 @@ export default function App() {
     [flush, persistConfig, showImages],
   );
 
+  const refreshFolder = useCallback(async () => {
+    const open = folderRef.current;
+    if (!open) return;
+    const ticket = ++refreshTicket.current;
+    try {
+      const result = await scanDataset(open);
+      if (ticket !== refreshTicket.current || folderRef.current !== open) return;
+      const ids = new Set(result.images.map((image) => image.path));
+      setImages((current) => mergeImages(current, result.images, pendingCaption));
+      setSelected((current) => dropMissing(current, ids));
+      setFocusId((current) => (current && ids.has(current) ? current : null));
+      setAnchorId((current) => (current && ids.has(current) ? current : null));
+      setReferenceIds((current) => {
+        const next = current.filter((id) => ids.has(id));
+        return next.length === current.length ? current : next;
+      });
+      if (result.unreadable > 0) {
+        setError(`${countLabel(result.unreadable, "caption file", "caption files")} could not be read.`);
+      }
+    } catch (err) {
+      if (ticket === refreshTicket.current) setError(errorMessage(err));
+    }
+  }, [pendingCaption]);
+
+  useEffect(() => {
+    if (!inTauri()) return undefined;
+    let stop = () => {};
+    let closed = false;
+    void listen<string>("dataset-changed", (event) => {
+      if (event.payload !== folderRef.current) return;
+      void refreshFolder();
+    }).then((unlisten) => {
+      if (closed) unlisten();
+      else stop = unlisten;
+    });
+    return () => {
+      closed = true;
+      stop();
+    };
+  }, [refreshFolder]);
+
   useEffect(() => {
     if (!inTauri()) return;
     let cancelled = false;
@@ -281,13 +380,9 @@ export default function App() {
           ...parseFolderFilters(config.folderFilters),
           ...loadFolderFilters(),
         };
-        setSettings({
-          showSidecar: config.showSidecar,
-          galleryView: parseGalleryView(config.galleryView),
-          frequentCount: config.frequentCount,
-          recentCount: config.recentCount,
-          recent: config.recent,
-        });
+        const localPresets = loadFilterPresets();
+        setFilterPresets(localPresets.length ? localPresets : parseFilterPresets(config.filterPresets));
+        setSettings(parseSettings(config));
         configReadyRef.current = true;
         if (config.lastFolder) void loadFolder(config.lastFolder);
       } catch (err) {
@@ -515,6 +610,7 @@ export default function App() {
   async function copyText(text: string) {
     try {
       await navigator.clipboard.writeText(text);
+      setError("");
     } catch {
       setError("Could not copy to the clipboard.");
     }
@@ -547,12 +643,56 @@ export default function App() {
     commit(next);
   }
 
-  function applyPreset(preset: "all" | "empty") {
+  function applySavedPreset(id: string) {
+    const preset = filterPresetsRef.current.find((item) => item.id === id);
+    if (!preset) return;
+    setQuery("");
+    setOnlyEmpty(false);
+    setHasTags(preset.hasTags);
+    setMissingTags(preset.missingTags);
+    setResetToken((token) => token + 1);
+  }
+
+  function saveFilterPreset(name: string) {
+    setFilterPresets((current) => upsertFilterPreset(current, name, hasTags, missingTags));
+  }
+
+  function renamePreset(id: string, name: string) {
+    setFilterPresets((current) => renameFilterPreset(current, id, name));
+  }
+
+  function overrideSavedPreset(id: string) {
+    setFilterPresets((current) => replaceFilterPreset(current, id, hasTags, missingTags));
+  }
+
+  function filterByTag(kind: "has" | "missing" | "only", tag: string) {
+    setOnlyEmpty(false);
+    if (kind === "only") {
+      setHasTags([tag]);
+      setMissingTags([]);
+      return;
+    }
+    if (kind === "has") {
+      setHasTags((current) => (current.includes(tag) ? current : [...current, tag]));
+      setMissingTags((current) => current.filter((item) => item !== tag));
+      return;
+    }
+    setMissingTags((current) => (current.includes(tag) ? current : [...current, tag]));
+    setHasTags((current) => current.filter((item) => item !== tag));
+  }
+
+  function clearFilters() {
+    setArmedPresetId("");
     setQuery("");
     setHasTags([]);
     setMissingTags([]);
-    setOnlyEmpty(preset === "empty");
+    setOnlyEmpty(false);
     setResetToken((token) => token + 1);
+  }
+
+  function applyPreset(preset: "all" | "empty") {
+    clearFilters();
+    setOnlyEmpty(preset === "empty");
     if (preset === "all") {
       setSelected(new Set());
       return;
@@ -564,6 +704,14 @@ export default function App() {
       setAnchorId(ids[0]);
     }
   }
+
+  useEffect(() => {
+    function blockNativeMenu(event: MouseEvent) {
+      event.preventDefault();
+    }
+    document.addEventListener("contextmenu", blockNativeMenu);
+    return () => document.removeEventListener("contextmenu", blockNativeMenu);
+  }, []);
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -605,6 +753,7 @@ export default function App() {
       <TopBar
         folder={folder}
         busy={busy}
+        popupOpen={settingsOpen || zoomed || renameId !== null}
         onOpen={() => void openFolder()}
         onSettings={() => setSettingsOpen(true)}
       />
@@ -619,10 +768,21 @@ export default function App() {
           query={query}
           hasTags={hasTags}
           missingTags={missingTags}
+          presets={filterPresets}
           activePreset={folder ? activePreset : ""}
+          activeSavedId={folder ? activeSavedId : ""}
           resetToken={resetToken}
           onQuery={setQuery}
           onPreset={applyPreset}
+          onApplySaved={applySavedPreset}
+          onSavePreset={saveFilterPreset}
+          onOverridePreset={overrideSavedPreset}
+          overridePreset={overridePreset}
+          onRenamePreset={renamePreset}
+          onRemovePreset={(id) => {
+            setFilterPresets((current) => current.filter((preset) => preset.id !== id));
+            setArmedPresetId((current) => (current === id ? "" : current));
+          }}
           onAddFilter={(kind, raw) => {
             const tag = normTag(raw);
             if (!tag) return;
@@ -636,6 +796,7 @@ export default function App() {
             if (kind === "has") setHasTags(hasTags.filter((item) => item !== tag));
             else setMissingTags(missingTags.filter((item) => item !== tag));
           }}
+          onClear={clearFilters}
         />
         <ImageGrid
           gridRef={gridRef}
@@ -669,6 +830,8 @@ export default function App() {
           selected={selected}
           focus={focus}
           showSidecar={settings.showSidecar}
+          coloredTags={settings.coloredTags}
+          colorRules={settings.colorRules}
           references={referenceIds.flatMap((id) => {
             const image = images.find((item) => item.id === id);
             return image ? [image] : [];
@@ -692,6 +855,9 @@ export default function App() {
             saveSoon(current.captionPath, value);
           }}
           onImageMenu={openImageMenu}
+          hasTags={hasTags}
+          onFilterTag={filterByTag}
+          onCopyTag={(tag) => void copyText(tag)}
           zoomed={zoomed}
           onZoom={() => setZoomed(true)}
           onCloseZoom={() => setZoomed(false)}

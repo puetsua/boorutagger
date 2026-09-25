@@ -1,8 +1,10 @@
-import { clampCount, normTag } from "./tags";
+import { clampCount, DEFAULT_COLORED_TAGS, normTag } from "./tags";
 
 export const LAST_FOLDER_KEY = "boorutagger-folder";
 const MAX_FOLDERS = 30;
 const MAX_FILTER_TAGS = 40;
+const MAX_PRESETS = 30;
+const MAX_PRESET_NAME = 40;
 
 const SETTINGS_KEY = "boorutagger-settings";
 
@@ -10,12 +12,18 @@ export const GALLERY_VIEWS = ["masonry", "tile", "list"] as const;
 
 export type GalleryView = (typeof GALLERY_VIEWS)[number];
 
+const MAX_COLORED_TAGS = 80;
+const MAX_COLOR_RULES = 20;
+const MAX_RULE_LENGTH = 80;
+
 export type Settings = {
   showSidecar: boolean;
   galleryView: GalleryView;
   frequentCount: number;
   recentCount: number;
   recent: string[];
+  coloredTags: string[];
+  colorRules: string[];
 };
 
 export type FolderFilters = {
@@ -23,9 +31,17 @@ export type FolderFilters = {
   missingTags: string[];
 };
 
+export type FilterPreset = {
+  id: string;
+  name: string;
+  hasTags: string[];
+  missingTags: string[];
+};
+
 export type UserConfig = Settings & {
   lastFolder: string | null;
   folderFilters: Record<string, FolderFilters>;
+  filterPresets: FilterPreset[];
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -34,6 +50,8 @@ export const DEFAULT_SETTINGS: Settings = {
   frequentCount: 8,
   recentCount: 8,
   recent: [],
+  coloredTags: [...DEFAULT_COLORED_TAGS],
+  colorRules: [],
 };
 
 export function parseGalleryView(value: unknown): GalleryView {
@@ -52,7 +70,48 @@ export function parseSettings(raw: unknown): Settings {
     frequentCount: clampCount(parsed.frequentCount ?? DEFAULT_SETTINGS.frequentCount),
     recentCount: clampCount(parsed.recentCount ?? DEFAULT_SETTINGS.recentCount),
     recent,
+    coloredTags: parseColoredTags(parsed.coloredTags),
+    colorRules: parseColorRules(parsed.colorRules),
   };
+}
+
+export function parseColorRules(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  const rules: string[] = [];
+  for (const item of raw) {
+    if (typeof item !== "string") continue;
+    const rule = item.trim();
+    if (!rule || rule.length > MAX_RULE_LENGTH || seen.has(rule) || !validRule(rule)) continue;
+    seen.add(rule);
+    rules.push(rule);
+    if (rules.length === MAX_COLOR_RULES) break;
+  }
+  return rules;
+}
+
+function validRule(rule: string): boolean {
+  try {
+    new RegExp(rule, "i");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function parseColoredTags(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [...DEFAULT_COLORED_TAGS];
+  const seen = new Set<string>();
+  const tags: string[] = [];
+  for (const item of raw) {
+    if (typeof item !== "string") continue;
+    const tag = normTag(item);
+    if (!tag || seen.has(tag)) continue;
+    seen.add(tag);
+    tags.push(tag);
+    if (tags.length === MAX_COLORED_TAGS) break;
+  }
+  return tags;
 }
 
 export function folderKey(folder: string): string {
@@ -123,12 +182,90 @@ export function sameFilterTags(left: readonly string[], right: readonly string[]
   return left.length === right.length && left.every((tag, index) => tag === right[index]);
 }
 
+export function parseFilterPresets(raw: unknown): FilterPreset[] {
+  if (!Array.isArray(raw)) return [];
+  const presets: FilterPreset[] = [];
+  const ids = new Set<string>();
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const parsed = item as Partial<FilterPreset>;
+    const id = typeof parsed.id === "string" ? parsed.id.trim() : "";
+    const name = cleanPresetName(parsed.name);
+    const hasTags = cleanFilterTags(parsed.hasTags);
+    const missingTags = cleanFilterTags(parsed.missingTags);
+    if (!id || !name || ids.has(id) || (hasTags.length === 0 && missingTags.length === 0)) continue;
+    ids.add(id);
+    presets.push({ id, name, hasTags, missingTags });
+    if (presets.length === MAX_PRESETS) break;
+  }
+  return presets;
+}
+
+export function upsertFilterPreset(
+  current: readonly FilterPreset[],
+  name: string,
+  hasTags: readonly string[],
+  missingTags: readonly string[],
+): FilterPreset[] {
+  const cleanName = cleanPresetName(name);
+  const nextHas = cleanFilterTags(hasTags);
+  const nextMissing = cleanFilterTags(missingTags);
+  if (!cleanName || (nextHas.length === 0 && nextMissing.length === 0)) return [...current];
+  const existing = current.find((preset) => preset.name.toLowerCase() === cleanName.toLowerCase());
+  if (existing) {
+    return current.map((preset) =>
+      preset.id === existing.id ? { ...preset, name: cleanName, hasTags: nextHas, missingTags: nextMissing } : preset,
+    );
+  }
+  return [...current, { id: crypto.randomUUID(), name: cleanName, hasTags: nextHas, missingTags: nextMissing }].slice(
+    -MAX_PRESETS,
+  );
+}
+
+export function replaceFilterPreset(
+  current: readonly FilterPreset[],
+  id: string,
+  hasTags: readonly string[],
+  missingTags: readonly string[],
+): FilterPreset[] {
+  const nextHas = cleanFilterTags(hasTags);
+  const nextMissing = cleanFilterTags(missingTags);
+  const owner = current.find((preset) => preset.id === id);
+  if (!owner || (nextHas.length === 0 && nextMissing.length === 0)) return current as FilterPreset[];
+  if (sameFilterTags(owner.hasTags, nextHas) && sameFilterTags(owner.missingTags, nextMissing)) {
+    return current as FilterPreset[];
+  }
+  return current.map((preset) => (preset.id === id ? { ...preset, hasTags: nextHas, missingTags: nextMissing } : preset));
+}
+
+export function renameFilterPreset(current: readonly FilterPreset[], id: string, name: string): FilterPreset[] {
+  const cleanName = cleanPresetName(name);
+  const owner = current.find((preset) => preset.id === id);
+  const taken = current.some((preset) => preset.id !== id && preset.name.toLowerCase() === cleanName.toLowerCase());
+  if (!cleanName || !owner || owner.name === cleanName || taken) return current as FilterPreset[];
+  return current.map((preset) => (preset.id === id ? { ...preset, name: cleanName } : preset));
+}
+
+export function presetMatches(
+  preset: FilterPreset,
+  hasTags: readonly string[],
+  missingTags: readonly string[],
+): boolean {
+  return sameFilterTags(preset.hasTags, hasTags) && sameFilterTags(preset.missingTags, missingTags);
+}
+
+function cleanPresetName(raw: unknown): string {
+  if (typeof raw !== "string") return "";
+  return raw.trim().replace(/\s+/g, " ").slice(0, MAX_PRESET_NAME);
+}
+
 export function toUserConfig(
   settings: Settings,
   lastFolder: string | null,
   folderFilters: Record<string, FolderFilters>,
+  filterPresets: readonly FilterPreset[],
 ): UserConfig {
-  return { ...settings, lastFolder, folderFilters };
+  return { ...settings, lastFolder, folderFilters, filterPresets: parseFilterPresets(filterPresets) };
 }
 
 export function loadSettings(): Settings {
@@ -151,8 +288,22 @@ export function loadFolderFilters(): Record<string, FolderFilters> {
   }
 }
 
-export function saveSettings(settings: Settings, folderFilters: Record<string, FolderFilters>) {
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...settings, folderFilters }));
+export function loadFilterPresets(): FilterPreset[] {
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY);
+    if (!raw) return [];
+    return parseFilterPresets((JSON.parse(raw) as { filterPresets?: unknown }).filterPresets);
+  } catch {
+    return [];
+  }
+}
+
+export function saveSettings(
+  settings: Settings,
+  folderFilters: Record<string, FolderFilters>,
+  filterPresets: readonly FilterPreset[],
+) {
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...settings, folderFilters, filterPresets }));
 }
 
 export function readLegacyLocal(): UserConfig | null {
@@ -165,6 +316,7 @@ export function readLegacyLocal(): UserConfig | null {
       ...parseSettings(parsed),
       lastFolder: last,
       folderFilters: parseFolderFilters(parsed.folderFilters),
+      filterPresets: parseFilterPresets((parsed as { filterPresets?: unknown }).filterPresets),
     };
   } catch {
     return null;
