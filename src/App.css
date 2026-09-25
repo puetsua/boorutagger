@@ -20,7 +20,7 @@
   --copyright: #c4a0ff;
   --artist: #e07a5f;
   --general: #9aa4b2;
-  --meta: #d4a017;
+  --meta: #a56b12;
   --focus: var(--brand);
   --titlebar: 32px;
   color-scheme: dark;
@@ -484,11 +484,11 @@ button:disabled { opacity: 0.45; cursor: default; }
   border-radius: inherit;
 }
 .cell[aria-pressed="true"]::after {
-  box-shadow: inset 0 0 0 2px #0f0b14, inset 0 0 0 5px var(--brand-strong);
+  box-shadow: inset 0 0 0 2px var(--bg-3), inset 0 0 0 5px var(--brand-strong);
 }
 .cell[aria-pressed="true"][aria-current="true"]::after,
 .cell:focus-visible::after {
-  box-shadow: inset 0 0 0 2px #0f0b14, inset 0 0 0 5px var(--brand-ring);
+  box-shadow: inset 0 0 0 2px var(--bg-3), inset 0 0 0 5px var(--brand-ring);
 }
 .thumb { aspect-ratio: 3 / 4; background: var(--bg-3); overflow: hidden; border-radius: var(--radius); }
 .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -507,7 +507,7 @@ button:disabled { opacity: 0.45; cursor: default; }
   text-overflow: ellipsis;
 }
 .fmeta { font-size: 10px; color: var(--fg-3); }
-.fmeta.empty { color: #ef9f5c; }
+.fmeta.empty { color: var(--artist); }
 .fcaption {
   font-size: 11px;
   color: var(--fg-3);
@@ -730,6 +730,7 @@ dialog.zoom[open] {
 }
 .trow.plain { grid-template-columns: minmax(0, 1fr) auto; }
 .swatch { width: 3px; height: 18px; border-radius: 1px; }
+.swatch.meta { background: var(--meta); }
 .tagname {
   font-family: var(--mono);
   font-size: 12px;

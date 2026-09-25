@@ -7,7 +7,6 @@ import {
   parseTags,
   pretty,
   sidecarName,
-  TAG_COLORS,
   tagLedger,
 } from "../tags";
 import { GALLERY_DRAG_TYPE, type ImageItem } from "../types";
@@ -194,7 +193,7 @@ export function CaptionSheet({
                     {...reorderHandlers(index, ledger.shared.length, false, onReorderShared)}
                   >
                     {meta(tag) && (
-                      <i className="swatch" style={{ background: TAG_COLORS.meta }} />
+                      <i className="swatch meta" />
                     )}
                     <span className="tagname">{pretty(tag)}</span>
                     <span className="tagops">
@@ -216,7 +215,7 @@ export function CaptionSheet({
                 {ledger.partial.map(({ tag, count: have }) => (
                   <div className={meta(tag) ? "trow" : "trow plain"} key={tag}>
                     {meta(tag) && (
-                      <i className="swatch" style={{ background: TAG_COLORS.meta }} />
+                      <i className="swatch meta" />
                     )}
                     <span className="tagname">{pretty(tag)}</span>
                     <span className="tagops">
@@ -252,8 +251,8 @@ export function CaptionSheet({
                       {...reorderHandlers(index, singleTags.length, true, onReorderSingle)}
                     >
                       {meta(tag) && (
-                      <i className="swatch" style={{ background: TAG_COLORS.meta }} />
-                    )}
+                        <i className="swatch meta" />
+                      )}
                       <span className="tag">{pretty(tag)}</span>
                       <button type="button" aria-label={`Remove ${pretty(tag)}`} onClick={() => onRemoveChip(index)}>
                         ×
@@ -509,7 +508,7 @@ function FolderStats({
               }}
             >
               {isMeta(tag) && (
-                <i className="swatch" style={{ background: TAG_COLORS.meta }} />
+                <i className="swatch meta" />
               )}
               <span>{pretty(tag)}</span>
               {have > 1 && <span className="n">{have}</span>}

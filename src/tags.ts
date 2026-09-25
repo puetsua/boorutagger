@@ -2,14 +2,6 @@ export const TAG_CATEGORIES = ["character", "copyright", "artist", "general", "m
 
 export type TagCategory = (typeof TAG_CATEGORIES)[number];
 
-export const TAG_COLORS: Record<TagCategory, string> = {
-  character: "#1b7a43",
-  copyright: "#7a3e9d",
-  artist: "#c4492c",
-  general: "#3e5c86",
-  meta: "#a56b12",
-};
-
 export const DEFAULT_COLORED_TAGS = [
   "simple_background",
   "white_background",
@@ -162,21 +154,6 @@ export function applySharedOrder(caption: string, nextShared: readonly string[])
       return replacement ?? tag;
     }),
   );
-}
-
-export function frequentTags(captions: readonly string[], skip: ReadonlySet<string>, limit: number): string[] {
-  if (limit <= 0) return [];
-  const counts = new Map<string, number>();
-  for (const caption of captions) {
-    for (const tag of parseTags(caption)) {
-      counts.set(tag, (counts.get(tag) ?? 0) + 1);
-    }
-  }
-  return [...counts.entries()]
-    .filter(([tag]) => !skip.has(tag))
-    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-    .slice(0, limit)
-    .map(([tag]) => tag);
 }
 
 export function clampCount(value: string | number): number {

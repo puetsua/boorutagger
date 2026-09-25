@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { GALLERY_VIEWS, type GalleryView, type Settings } from "../settings";
-import { clampCount, normTag, pretty, TAG_COLORS } from "../tags";
+import { GALLERY_VIEWS, validRule, type GalleryView, type Settings } from "../settings";
+import { clampCount, normTag, pretty } from "../tags";
 
 const VIEW_LABELS: Record<GalleryView, string> = {
   masonry: "Masonry",
@@ -78,12 +78,6 @@ export function SettingsDialog({ open, settings, onClose, onChange }: SettingsDi
           onRules={(colorRules) => onChange({ ...settings, colorRules })}
         />
         <CountSlider
-          label="Frequently used tags"
-          hint="How many of the most common tags to show. 0 hides the list."
-          value={settings.frequentCount}
-          onChange={(frequentCount) => onChange({ ...settings, frequentCount })}
-        />
-        <CountSlider
           label="Last tags used"
           hint="How many of the last tags you added to show. 0 hides the list."
           value={settings.recentCount}
@@ -123,9 +117,7 @@ function ColoredTags({
   function addRule() {
     const pattern = rule.trim();
     if (!pattern) return;
-    try {
-      new RegExp(pattern, "i");
-    } catch {
+    if (!validRule(pattern)) {
       setRuleError("That regex is not valid.");
       return;
     }
@@ -143,7 +135,7 @@ function ColoredTags({
         <div className="fchips">
           {tags.map((tag) => (
             <span className="fchip" key={tag}>
-              <i className="swatch" style={{ background: TAG_COLORS.meta }} />
+              <i className="swatch meta" />
               <span>{pretty(tag)}</span>
               <button
                 type="button"
@@ -175,7 +167,7 @@ function ColoredTags({
         <div className="fchips">
           {rules.map((pattern) => (
             <span className="fchip" key={pattern}>
-              <i className="swatch" style={{ background: TAG_COLORS.meta }} />
+              <i className="swatch meta" />
               <span>{pattern}</span>
               <button
                 type="button"

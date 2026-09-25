@@ -44,8 +44,6 @@ pub struct UserConfig {
     #[serde(default = "default_gallery_view")]
     pub gallery_view: String,
     #[serde(default = "default_count")]
-    pub frequent_count: u32,
-    #[serde(default = "default_count")]
     pub recent_count: u32,
     #[serde(default)]
     pub recent: Vec<String>,
@@ -66,7 +64,6 @@ impl Default for UserConfig {
         Self {
             show_sidecar: false,
             gallery_view: default_gallery_view(),
-            frequent_count: DEFAULT_COUNT,
             recent_count: DEFAULT_COUNT,
             recent: Vec::new(),
             last_folder: None,
@@ -135,10 +132,8 @@ pub fn save_to(path: &Path, config: &UserConfig) -> Result<(), String> {
 }
 
 fn normalize(mut config: UserConfig) -> UserConfig {
-    config.frequent_count = config.frequent_count.min(MAX_COUNT);
     config.recent_count = config.recent_count.min(MAX_COUNT);
-    config.recent.retain(|tag| !tag.is_empty());
-    config.recent.truncate(20);
+    config.recent = clean_tag_list(config.recent, 20);
     config.gallery_view = match config.gallery_view.as_str() {
         "grid" => default_gallery_view(),
         "tile" | "list" | "masonry" => config.gallery_view,
@@ -296,7 +291,7 @@ mod tests {
         let path = temp_path("missing");
         let loaded = load_from(&path).unwrap();
         assert!(!loaded.show_sidecar);
-        assert_eq!(loaded.frequent_count, 8);
+        assert_eq!(loaded.recent_count, 8);
         assert!(loaded.last_folder.is_none());
         let _ = fs::remove_dir_all(path.parent().unwrap());
     }
@@ -307,9 +302,8 @@ mod tests {
         let config = UserConfig {
             show_sidecar: true,
             gallery_view: "tile".into(),
-            frequent_count: 12,
             recent_count: 4,
-            recent: vec!["1girl".into(), "solo".into()],
+            recent: vec!["1girl".into(), "solo".into(), "Blue Hair".into()],
             last_folder: Some(r"D:\data\set".into()),
             folder_filters: HashMap::from([(
                 r"D:\data\set\".into(),
@@ -331,9 +325,8 @@ mod tests {
         let loaded = load_from(&path).unwrap();
         assert!(loaded.show_sidecar);
         assert_eq!(loaded.gallery_view, "tile");
-        assert_eq!(loaded.frequent_count, 12);
         assert_eq!(loaded.recent_count, 4);
-        assert_eq!(loaded.recent, ["1girl", "solo"]);
+        assert_eq!(loaded.recent, ["1girl", "solo", "blue_hair"]);
         assert_eq!(loaded.last_folder.as_deref(), Some(r"D:\data\set"));
         assert_eq!(
             loaded.folder_filters.get(r"d:\data\set"),
@@ -362,7 +355,6 @@ mod tests {
         let config = UserConfig {
             show_sidecar: false,
             gallery_view: "cards".into(),
-            frequent_count: 99,
             recent_count: 99,
             recent: vec!["".into(), "tag".into()],
             last_folder: Some("   ".into()),
@@ -379,7 +371,6 @@ mod tests {
         save_to(&path, &config).unwrap();
         let loaded = load_from(&path).unwrap();
         assert_eq!(loaded.gallery_view, "masonry");
-        assert_eq!(loaded.frequent_count, 20);
         assert_eq!(loaded.recent_count, 20);
         assert_eq!(loaded.recent, ["tag"]);
         assert!(loaded.last_folder.is_none());

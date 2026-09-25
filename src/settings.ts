@@ -19,7 +19,6 @@ const MAX_RULE_LENGTH = 80;
 export type Settings = {
   showSidecar: boolean;
   galleryView: GalleryView;
-  frequentCount: number;
   recentCount: number;
   recent: string[];
   coloredTags: string[];
@@ -47,7 +46,6 @@ export type UserConfig = Settings & {
 export const DEFAULT_SETTINGS: Settings = {
   showSidecar: false,
   galleryView: "masonry",
-  frequentCount: 8,
   recentCount: 8,
   recent: [],
   coloredTags: [...DEFAULT_COLORED_TAGS],
@@ -61,15 +59,11 @@ export function parseGalleryView(value: unknown): GalleryView {
 
 export function parseSettings(raw: unknown): Settings {
   const parsed = raw && typeof raw === "object" ? (raw as Partial<Settings>) : {};
-  const recent = Array.isArray(parsed.recent)
-    ? parsed.recent.filter((tag): tag is string => typeof tag === "string").slice(0, 20)
-    : [];
   return {
     showSidecar: parsed.showSidecar === true,
     galleryView: parseGalleryView(parsed.galleryView),
-    frequentCount: clampCount(parsed.frequentCount ?? DEFAULT_SETTINGS.frequentCount),
     recentCount: clampCount(parsed.recentCount ?? DEFAULT_SETTINGS.recentCount),
-    recent,
+    recent: cleanTagList(parsed.recent, 20),
     coloredTags: parseColoredTags(parsed.coloredTags),
     colorRules: parseColorRules(parsed.colorRules),
   };
@@ -90,7 +84,7 @@ export function parseColorRules(raw: unknown): string[] {
   return rules;
 }
 
-function validRule(rule: string): boolean {
+export function validRule(rule: string): boolean {
   try {
     new RegExp(rule, "i");
     return true;
@@ -101,17 +95,7 @@ function validRule(rule: string): boolean {
 
 export function parseColoredTags(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [...DEFAULT_COLORED_TAGS];
-  const seen = new Set<string>();
-  const tags: string[] = [];
-  for (const item of raw) {
-    if (typeof item !== "string") continue;
-    const tag = normTag(item);
-    if (!tag || seen.has(tag)) continue;
-    seen.add(tag);
-    tags.push(tag);
-    if (tags.length === MAX_COLORED_TAGS) break;
-  }
-  return tags;
+  return cleanTagList(raw, MAX_COLORED_TAGS);
 }
 
 export function folderKey(folder: string): string {
@@ -164,6 +148,10 @@ export function rememberFolderFilters(
 }
 
 function cleanFilterTags(raw: unknown): string[] {
+  return cleanTagList(raw, MAX_FILTER_TAGS);
+}
+
+function cleanTagList(raw: unknown, limit: number): string[] {
   if (!Array.isArray(raw)) return [];
   const seen = new Set<string>();
   const tags: string[] = [];
@@ -173,7 +161,7 @@ function cleanFilterTags(raw: unknown): string[] {
     if (!tag || seen.has(tag)) continue;
     seen.add(tag);
     tags.push(tag);
-    if (tags.length === MAX_FILTER_TAGS) break;
+    if (tags.length === limit) break;
   }
   return tags;
 }
