@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { errorMessage, imageSrc, inTauri, loadUserConfig, pickFolder, renameImage, revealImage, saveUserConfig, scanDataset, type ScannedImage } from "./api";
+import { errorMessage, imageSrc, inTauri, loadUserConfig, pickFolder, renameImage, revealImage, saveUserConfig, scanDataset, suggestTags, type ScannedImage } from "./api";
 import { CaptionSheet } from "./components/CaptionSheet";
 import { ImageGrid } from "./components/ImageGrid";
 import { fileParts, ImageMenu, RenameDialog } from "./components/ImageMenu";
@@ -36,6 +36,7 @@ import {
 import { imageVisible, joinTags, moveItem, needsCaption, normTag, parseTags } from "./tags";
 import type { ImageItem } from "./types";
 import { useCaptionSaver } from "./useCaptionSaver";
+import { useTagger } from "./useTagger";
 import "./App.css";
 
 function mergeImages(
@@ -162,6 +163,7 @@ export default function App() {
   filterPresetsRef.current = filterPresets;
 
   const { saveSoon, saveNow, flush, pendingCaption } = useCaptionSaver(setError);
+  const tagger = useTagger(settings.taggerFolder);
   folderRef.current = folder;
 
   const filters = useMemo(
@@ -449,6 +451,20 @@ export default function App() {
       return { ...image, caption: joinTags([...tags, ...added]) };
     });
     commit(next);
+  }
+
+  async function suggestFor(path: string) {
+    const { taggerFolder, taggerThreshold } = settingsRef.current;
+    return parseTags((await suggestTags(path, taggerFolder, taggerThreshold)).join(","));
+  }
+
+  async function pickModelFolder() {
+    try {
+      const picked = await pickFolder("Choose model folder");
+      if (picked) setSettings((current) => ({ ...current, taggerFolder: picked }));
+    } catch (err) {
+      setError(errorMessage(err));
+    }
   }
 
   function removeTag(tag: string) {
@@ -812,6 +828,8 @@ export default function App() {
           recentCount={settings.recentCount}
           recent={settings.recent}
           error={error}
+          taggerReady={tagger.status?.installed === true}
+          onSuggest={suggestFor}
           onAddTag={addTag}
           onRemoveTag={removeTag}
           onReorderSingle={reorderSingle}
@@ -901,6 +919,8 @@ export default function App() {
         settings={settings}
         onClose={() => setSettingsOpen(false)}
         onChange={setSettings}
+        tagger={tagger}
+        onPickModelFolder={() => void pickModelFolder()}
       />
     </div>
   );

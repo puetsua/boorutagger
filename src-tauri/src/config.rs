@@ -12,6 +12,9 @@ const MAX_FOLDERS: usize = 30;
 const MAX_FILTER_TAGS: usize = 40;
 const MAX_PRESETS: usize = 30;
 const MAX_PRESET_NAME: usize = 40;
+const MIN_THRESHOLD: u32 = 5;
+const MAX_THRESHOLD: u32 = 95;
+const DEFAULT_THRESHOLD: u32 = 35;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -50,6 +53,10 @@ pub struct UserConfig {
     pub folder_filters: HashMap<String, FolderFilters>,
     #[serde(default)]
     pub filter_presets: Vec<FilterPreset>,
+    #[serde(default)]
+    pub tagger_folder: Option<String>,
+    #[serde(default = "default_threshold")]
+    pub tagger_threshold: u32,
 }
 
 impl Default for UserConfig {
@@ -62,6 +69,8 @@ impl Default for UserConfig {
             last_folder: None,
             folder_filters: HashMap::new(),
             filter_presets: Vec::new(),
+            tagger_folder: None,
+            tagger_threshold: DEFAULT_THRESHOLD,
         }
     }
 }
@@ -77,12 +86,20 @@ fn default_count() -> u32 {
     DEFAULT_COUNT
 }
 
+fn default_threshold() -> u32 {
+    DEFAULT_THRESHOLD
+}
+
 fn default_gallery_view() -> String {
     "masonry".into()
 }
 
 pub fn config_path() -> Result<PathBuf, String> {
     Ok(home_dir()?.join(CONFIG_DIR).join(CONFIG_FILE))
+}
+
+pub fn models_dir() -> Result<PathBuf, String> {
+    Ok(home_dir()?.join(CONFIG_DIR).join("models"))
 }
 
 fn home_dir() -> Result<PathBuf, String> {
@@ -137,6 +154,11 @@ fn normalize(mut config: UserConfig) -> UserConfig {
     {
         config.last_folder = None;
     }
+    config.tagger_folder = config
+        .tagger_folder
+        .map(|folder| folder.trim().to_string())
+        .filter(|folder| !folder.is_empty());
+    config.tagger_threshold = config.tagger_threshold.clamp(MIN_THRESHOLD, MAX_THRESHOLD);
     config.folder_filters = clean_folder_filters(config.folder_filters);
     config.filter_presets = clean_presets(config.filter_presets);
     config
@@ -303,6 +325,8 @@ mod tests {
                 has_tags: vec!["solo".into()],
                 missing_tags: vec!["blue hair".into()],
             }],
+            tagger_folder: Some(r" D:\models ".into()),
+            tagger_threshold: 50,
         };
         save_to(&path, &config).unwrap();
         let loaded = load_from(&path).unwrap();
@@ -314,6 +338,8 @@ mod tests {
             ["1girl", "solo", "blue hair", "my_trigger", "tank (container)"]
         );
         assert_eq!(loaded.last_folder.as_deref(), Some(r"D:\data\set"));
+        assert_eq!(loaded.tagger_folder.as_deref(), Some(r"D:\models"));
+        assert_eq!(loaded.tagger_threshold, 50);
         assert_eq!(
             loaded.folder_filters.get(r"d:\data\set"),
             Some(&FolderFilters {
@@ -349,6 +375,8 @@ mod tests {
                 has_tags: vec![],
                 missing_tags: vec![],
             }],
+            tagger_folder: Some("   ".into()),
+            tagger_threshold: 99,
         };
         save_to(&path, &config).unwrap();
         let loaded = load_from(&path).unwrap();
@@ -357,6 +385,8 @@ mod tests {
         assert_eq!(loaded.recent, ["tag"]);
         assert!(loaded.last_folder.is_none());
         assert!(loaded.filter_presets.is_empty());
+        assert!(loaded.tagger_folder.is_none());
+        assert_eq!(loaded.tagger_threshold, 95);
         let _ = fs::remove_dir_all(path.parent().unwrap());
     }
 }

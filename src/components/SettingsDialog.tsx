@@ -1,6 +1,7 @@
 import { useEffect, useRef, type CSSProperties } from "react";
-import { GALLERY_VIEWS, type GalleryView, type Settings } from "../settings";
+import { clampThreshold, GALLERY_VIEWS, MAX_THRESHOLD, MIN_THRESHOLD, type GalleryView, type Settings } from "../settings";
 import { clampCount } from "../tags";
+import type { TaggerState } from "../useTagger";
 
 const VIEW_LABELS: Record<GalleryView, string> = {
   masonry: "Masonry",
@@ -13,9 +14,11 @@ type SettingsDialogProps = {
   settings: Settings;
   onClose: () => void;
   onChange: (settings: Settings) => void;
+  tagger: TaggerState;
+  onPickModelFolder: () => void;
 };
 
-export function SettingsDialog({ open, settings, onClose, onChange }: SettingsDialogProps) {
+export function SettingsDialog({ open, settings, onClose, onChange, tagger, onPickModelFolder }: SettingsDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
@@ -75,7 +78,17 @@ export function SettingsDialog({ open, settings, onClose, onChange }: SettingsDi
           label="Last tags used"
           hint="How many of the last tags you added to show. 0 hides the list."
           value={settings.recentCount}
-          onChange={(recentCount) => onChange({ ...settings, recentCount })}
+          onChange={(recentCount) => onChange({ ...settings, recentCount: clampCount(recentCount) })}
+        />
+        <TaggerSetting tagger={tagger} onPickFolder={onPickModelFolder} />
+        <CountSlider
+          label="AI tag threshold"
+          hint="Lowest confidence for a suggested tag."
+          min={MIN_THRESHOLD}
+          max={MAX_THRESHOLD}
+          value={settings.taggerThreshold}
+          shown={(settings.taggerThreshold / 100).toFixed(2)}
+          onChange={(taggerThreshold) => onChange({ ...settings, taggerThreshold: clampThreshold(taggerThreshold) })}
         />
         <button className="quiet" type="submit">
           Done
@@ -86,33 +99,70 @@ export function SettingsDialog({ open, settings, onClose, onChange }: SettingsDi
   );
 }
 
+function TaggerSetting({ tagger, onPickFolder }: { tagger: TaggerState; onPickFolder: () => void }) {
+  const { status, progress, error, download } = tagger;
+  const downloading = progress !== null;
+  return (
+    <div className="setting">
+      AI tagger
+      <p>WD ViT Tagger v3 suggests tags for the selected image. The model is about 370 MB and downloads only when you ask.</p>
+      {status ? (
+        <div className="model-row">
+          <span className="model-path" title={status.folder}>
+            {status.folder}
+          </span>
+          <button className="quiet" type="button" disabled={downloading} onClick={onPickFolder}>
+            Change
+          </button>
+          {status.installed ? (
+            <span className="model-state">Ready</span>
+          ) : (
+            <button className="quiet" type="button" disabled={downloading} onClick={() => void download()}>
+              {downloading ? `Downloading ${progress}%` : "Download"}
+            </button>
+          )}
+        </div>
+      ) : (
+        <p>Available in the desktop app.</p>
+      )}
+      {error && <p className="model-error">{error}</p>}
+    </div>
+  );
+}
+
 function CountSlider({
   label,
   hint,
   value,
   onChange,
+  min = 0,
+  max = 20,
+  shown = String(value),
 }: {
   label: string;
   hint: string;
   value: number;
   onChange: (value: number) => void;
+  min?: number;
+  max?: number;
+  shown?: string;
 }) {
   return (
     <label className="setting">
       <span className="slider-head">
         {label}
-        <span className="slider-value">{value}</span>
+        <span className="slider-value">{shown}</span>
       </span>
       <p>{hint}</p>
       <input
         type="range"
-        min={0}
-        max={20}
+        min={min}
+        max={max}
         step={1}
         value={value}
-        aria-valuetext={String(value)}
-        style={{ "--fill": `${(value / 20) * 100}%` } as CSSProperties}
-        onChange={(event) => onChange(clampCount(event.target.value))}
+        aria-valuetext={shown}
+        style={{ "--fill": `${((value - min) / (max - min)) * 100}%` } as CSSProperties}
+        onChange={(event) => onChange(Number(event.target.value))}
       />
     </label>
   );

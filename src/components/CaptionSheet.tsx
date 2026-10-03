@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type DragEvent as ReactDragEvent, type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode } from "react";
+import { errorMessage } from "../api";
 import { TagMenu } from "./ImageMenu";
 import { needsCaption, parseTags, sidecarName } from "../tags";
 import { GALLERY_DRAG_TYPE, type ImageItem } from "../types";
@@ -14,6 +15,8 @@ type CaptionSheetProps = {
   recentCount: number;
   recent: readonly string[];
   error: string;
+  taggerReady: boolean;
+  onSuggest: (path: string) => Promise<string[]>;
   onAddTag: (tag: string) => void;
   onRemoveTag: (tag: string) => void;
   onReorderSingle: (from: number, to: number) => void;
@@ -41,6 +44,8 @@ export function CaptionSheet({
   recentCount,
   recent,
   error,
+  taggerReady,
+  onSuggest,
   onAddTag,
   onRemoveTag,
   onReorderSingle,
@@ -231,6 +236,9 @@ export function CaptionSheet({
             Add
           </button>
         </form>
+        {count === 1 && taggerReady && preview && (
+          <AiTags key={preview.path} path={preview.path} owned={ownedTags} onSuggest={onSuggest} onAdd={onAddTag} />
+        )}
         {referenceTags.some((tag) => !ownedTags.has(tag)) && (
           <div className="tag-block ref-tags">
             <h2>Tags from references</h2>
@@ -296,6 +304,57 @@ export function CaptionSheet({
         )}
       </div>
     </aside>
+  );
+}
+
+function AiTags({
+  path,
+  owned,
+  onSuggest,
+  onAdd,
+}: {
+  path: string;
+  owned: ReadonlySet<string>;
+  onSuggest: (path: string) => Promise<string[]>;
+  onAdd: (tag: string) => void;
+}) {
+  const [tags, setTags] = useState<string[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const fresh = tags?.filter((tag) => !owned.has(tag)) ?? [];
+
+  async function suggest() {
+    setBusy(true);
+    setError("");
+    try {
+      setTags(await onSuggest(path));
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="tag-block ai-tags">
+      <h2>AI tags</h2>
+      {tags === null ? (
+        <button className="quiet" type="button" disabled={busy} onClick={() => void suggest()}>
+          {busy ? "Tagging…" : "Suggest tags"}
+        </button>
+      ) : fresh.length === 0 ? (
+        <p className="hint-line">No new tags above the threshold.</p>
+      ) : (
+        <div className="suggest">
+          {fresh.map((tag) => (
+            <button key={tag} type="button" onClick={() => onAdd(tag)}>
+              {tag}
+            </button>
+          ))}
+        </div>
+      )}
+      {error && <p className="sheet-error">{error}</p>}
+    </div>
   );
 }
 

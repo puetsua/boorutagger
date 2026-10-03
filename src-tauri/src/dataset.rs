@@ -114,6 +114,14 @@ pub fn check_caption_path(folder: &Path, file: &Path) -> Result<(), String> {
     Ok(())
 }
 
+pub fn check_image_path(folder: &Path, file: &Path) -> Result<(), String> {
+    let ext = file.extension().and_then(|ext| ext.to_str()).unwrap_or("");
+    if !is_image_ext(ext) || !file.is_file() || !is_under(folder, file) {
+        return Err("That image is not in the open folder.".into());
+    }
+    Ok(())
+}
+
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct RenamedImage {
@@ -414,6 +422,21 @@ mod tests {
         let outside = other.join("image.txt");
         assert!(check_caption_path(&dir, &outside).is_err());
         assert!(check_caption_path(&dir, &dir.join("image.png")).is_err());
+        let _ = fs::remove_dir_all(&dir);
+        let _ = fs::remove_dir_all(&other);
+    }
+
+    #[test]
+    fn reads_images_only_inside_the_folder() {
+        let dir = temp_dir("image-guard");
+        let other = temp_dir("image-other");
+        fs::write(dir.join("a.png"), b"x").unwrap();
+        fs::write(dir.join("a.txt"), b"x").unwrap();
+        fs::write(other.join("b.png"), b"x").unwrap();
+        check_image_path(&dir, &dir.join("a.png")).unwrap();
+        assert!(check_image_path(&dir, &dir.join("a.txt")).is_err());
+        assert!(check_image_path(&dir, &dir.join("missing.png")).is_err());
+        assert!(check_image_path(&dir, &other.join("b.png")).is_err());
         let _ = fs::remove_dir_all(&dir);
         let _ = fs::remove_dir_all(&other);
     }

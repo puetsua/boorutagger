@@ -1,5 +1,6 @@
 mod config;
 mod dataset;
+mod tagger;
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -7,10 +8,11 @@ use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use config::{load_user_config, save_user_config};
-use dataset::{check_caption_path, path_changes_dataset, rename_image, scan_folder, write_caption_file, RenamedImage, ScanResult};
+use config::{load_user_config, models_dir, save_user_config};
+use dataset::{check_caption_path, check_image_path, path_changes_dataset, rename_image, scan_folder, write_caption_file, RenamedImage, ScanResult};
 use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use tagger::Tagger;
 use tauri::{AppHandle, Emitter, Manager, State};
 
 struct OpenFolder {
@@ -19,10 +21,47 @@ struct OpenFolder {
     quiet_captions: Arc<Mutex<HashMap<String, Instant>>>,
 }
 
+struct LoadedTagger(Arc<Mutex<Option<Tagger>>>);
+
+#[derive(Serialize)]
+struct TaggerStatus {
+    folder: String,
+    installed: bool,
+}
+
+#[derive(Clone, Serialize)]
+struct DownloadProgress {
+    received: u64,
+    total: u64,
+}
+
 #[derive(Deserialize)]
 struct CaptionWrite {
     path: String,
     text: String,
+}
+
+fn open_folder(state: &OpenFolder) -> Result<PathBuf, String> {
+    state
+        .path
+        .lock()
+        .map_err(|_| "Could not check the open folder.".to_string())?
+        .clone()
+        .ok_or_else(|| "Open a folder first.".to_string())
+}
+
+fn tagger_folder(folder: Option<String>) -> Result<PathBuf, String> {
+    match folder.filter(|folder| !folder.trim().is_empty()) {
+        Some(folder) => Ok(PathBuf::from(folder)),
+        None => Ok(models_dir()?.join(tagger::MODEL_NAME)),
+    }
+}
+
+fn status_of(folder: &Path) -> TaggerStatus {
+    TaggerStatus {
+        folder: folder.to_string_lossy().into_owned(),
+        installed: tagger::installed(folder),
+    }
 }
 
 fn caption_key(path: &Path) -> String {
@@ -109,29 +148,13 @@ fn rename_dataset_image(
     path: String,
     file_name: String,
 ) -> Result<RenamedImage, String> {
-    let folder = {
-        let guard = state
-            .path
-            .lock()
-            .map_err(|_| "Could not check the open folder.".to_string())?;
-        guard
-            .clone()
-            .ok_or_else(|| "Open a folder first.".to_string())?
-    };
+    let folder = open_folder(&state)?;
     rename_image(&folder, Path::new(&path), &file_name)
 }
 
 #[tauri::command]
 fn write_captions(state: State<OpenFolder>, items: Vec<CaptionWrite>) -> Result<(), String> {
-    let folder = {
-        let guard = state
-            .path
-            .lock()
-            .map_err(|_| "Could not check the open folder.".to_string())?;
-        guard
-            .clone()
-            .ok_or_else(|| "Open a folder first.".to_string())?
-    };
+    let folder = open_folder(&state)?;
     let now = Instant::now();
     let mut quiet = state
         .quiet_captions
@@ -145,6 +168,50 @@ fn write_captions(state: State<OpenFolder>, items: Vec<CaptionWrite>) -> Result<
         write_caption_file(&path, &item.text)?;
     }
     Ok(())
+}
+
+#[tauri::command]
+fn tagger_status(folder: Option<String>) -> Result<TaggerStatus, String> {
+    Ok(status_of(&tagger_folder(folder)?))
+}
+
+#[tauri::command]
+async fn download_tagger(app: AppHandle, folder: Option<String>) -> Result<TaggerStatus, String> {
+    let folder = tagger_folder(folder)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        tagger::download(&folder, |received, total| {
+            let _ = app.emit("tagger-progress", DownloadProgress { received, total });
+        })?;
+        Ok(status_of(&folder))
+    })
+    .await
+    .map_err(|err| format!("The download stopped. {err}"))?
+}
+
+#[tauri::command]
+async fn suggest_tags(
+    state: State<'_, OpenFolder>,
+    loaded: State<'_, LoadedTagger>,
+    path: String,
+    folder: Option<String>,
+    threshold: u32,
+) -> Result<Vec<String>, String> {
+    let image = PathBuf::from(path);
+    check_image_path(&open_folder(&state)?, &image)?;
+    let folder = tagger_folder(folder)?;
+    let loaded = Arc::clone(&loaded.0);
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut slot = loaded
+            .lock()
+            .map_err(|_| "The tagger is not available.".to_string())?;
+        if slot.as_ref().is_none_or(|tagger| tagger.folder() != folder) {
+            *slot = Some(Tagger::load(&folder)?);
+        }
+        let tagger = slot.as_mut().ok_or("The tagger is not available.")?;
+        tagger.suggest(&image, threshold as f32 / 100.0)
+    })
+    .await
+    .map_err(|err| format!("The tagger stopped. {err}"))?
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -164,12 +231,16 @@ pub fn run() {
             watch: Mutex::new(None),
             quiet_captions: Arc::new(Mutex::new(HashMap::new())),
         })
+        .manage(LoadedTagger(Arc::new(Mutex::new(None))))
         .invoke_handler(tauri::generate_handler![
             scan_dataset,
             rename_dataset_image,
             write_captions,
             load_user_config,
-            save_user_config
+            save_user_config,
+            tagger_status,
+            download_tagger,
+            suggest_tags
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

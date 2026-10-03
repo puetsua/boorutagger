@@ -21,15 +21,25 @@ export type ScanResult = {
   unreadable: number;
 };
 
+export type TaggerStatus = {
+  folder: string;
+  installed: boolean;
+};
+
+export type DownloadProgress = {
+  received: number;
+  total: number;
+};
+
 export function inTauri(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
 
-export async function pickFolder(): Promise<string | null> {
+export async function pickFolder(title = "Open image folder"): Promise<string | null> {
   const selected = await open({
     directory: true,
     multiple: false,
-    title: "Open image folder",
+    title,
   });
   if (selected === null || Array.isArray(selected)) return null;
   return selected;
@@ -57,6 +67,18 @@ export function loadUserConfig(): Promise<{ config: UserConfig; exists: boolean 
 
 export function saveUserConfig(config: UserConfig): Promise<void> {
   return invoke("save_user_config", { config });
+}
+
+export function taggerStatus(folder: string | null): Promise<TaggerStatus> {
+  return invoke<TaggerStatus>("tagger_status", { folder });
+}
+
+export function downloadTagger(folder: string | null): Promise<TaggerStatus> {
+  return invoke<TaggerStatus>("download_tagger", { folder });
+}
+
+export function suggestTags(path: string, folder: string | null, threshold: number): Promise<string[]> {
+  return invoke<string[]>("suggest_tags", { path, folder, threshold });
 }
 
 export function imageSrc(path: string): string {

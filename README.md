@@ -6,7 +6,7 @@ Work in progress desktop app for captioning image datasets used in LoRA training
 
 ![BooruTagger, with the gallery open and folder tag counts](docs/preview.png)
 
-Open a folder of images. Filter the working set, select one image or many, and edit the tags. Changes are written back to the `.txt` files. The app is still changing, so expect rough edges. Earlier design mocks are in `design/`.
+Open a folder of images. Filter the working set, select one image or many, and edit the tags. Changes are written back to the `.txt` files. An optional AI tagger ([WD ViT Tagger v3](https://huggingface.co/SmilingWolf/wd-vit-tagger-v3)) can suggest tags; download it from Settings into any folder you choose. The app is still changing, so expect rough edges. Earlier design mocks are in `design/`.
 
 ## Install
 

@@ -5,6 +5,8 @@ const MAX_FOLDERS = 30;
 const MAX_FILTER_TAGS = 40;
 const MAX_PRESETS = 30;
 const MAX_PRESET_NAME = 40;
+export const MIN_THRESHOLD = 5;
+export const MAX_THRESHOLD = 95;
 
 const SETTINGS_KEY = "boorutagger-settings";
 
@@ -17,6 +19,8 @@ export type Settings = {
   galleryView: GalleryView;
   recentCount: number;
   recent: string[];
+  taggerFolder: string | null;
+  taggerThreshold: number;
 };
 
 export type FolderFilters = {
@@ -42,6 +46,8 @@ export const DEFAULT_SETTINGS: Settings = {
   galleryView: "masonry",
   recentCount: 8,
   recent: [],
+  taggerFolder: null,
+  taggerThreshold: 35,
 };
 
 export function parseGalleryView(value: unknown): GalleryView {
@@ -56,7 +62,15 @@ export function parseSettings(raw: unknown): Settings {
     galleryView: parseGalleryView(parsed.galleryView),
     recentCount: clampCount(parsed.recentCount ?? DEFAULT_SETTINGS.recentCount),
     recent: cleanTagList(parsed.recent, 20),
+    taggerFolder: typeof parsed.taggerFolder === "string" && parsed.taggerFolder.trim() ? parsed.taggerFolder.trim() : null,
+    taggerThreshold: clampThreshold(parsed.taggerThreshold ?? DEFAULT_SETTINGS.taggerThreshold),
   };
+}
+
+export function clampThreshold(value: string | number): number {
+  const n = Math.round(Number(value));
+  if (!Number.isFinite(n)) return DEFAULT_SETTINGS.taggerThreshold;
+  return Math.min(MAX_THRESHOLD, Math.max(MIN_THRESHOLD, n));
 }
 
 export function folderKey(folder: string): string {
