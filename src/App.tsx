@@ -54,14 +54,20 @@ function mergeImages(
         path: record.path,
         captionPath: record.captionPath,
         caption: record.caption,
-        src: imageSrc(record.path),
+        src: imageSrc(record.path, record.modified),
       };
     }
     const caption = pendingCaption(existing.captionPath) ? existing.caption : record.caption;
-    if (existing.name === record.name && existing.captionPath === record.captionPath && existing.caption === caption) {
+    const src = imageSrc(record.path, record.modified);
+    if (
+      existing.name === record.name &&
+      existing.captionPath === record.captionPath &&
+      existing.caption === caption &&
+      existing.src === src
+    ) {
       return existing;
     }
-    return { ...existing, name: record.name, captionPath: record.captionPath, caption };
+    return { ...existing, name: record.name, captionPath: record.captionPath, caption, src };
   });
 }
 
@@ -299,7 +305,7 @@ export default function App() {
             path: record.path,
             captionPath: record.captionPath,
             caption: record.caption,
-            src: imageSrc(record.path),
+            src: imageSrc(record.path, record.modified),
           })),
           result.unreadable,
         );

@@ -1,6 +1,7 @@
 use std::cmp::Ordering;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::UNIX_EPOCH;
 
 use serde::Serialize;
 
@@ -11,6 +12,7 @@ pub struct ImageRecord {
     pub path: String,
     pub caption_path: String,
     pub caption: String,
+    pub modified: u64,
 }
 
 #[derive(Debug, Serialize)]
@@ -81,9 +83,17 @@ fn collect_images(
             path: path.to_string_lossy().into_owned(),
             caption_path: caption_path.to_string_lossy().into_owned(),
             caption,
+            modified: modified_ms(&meta),
         });
     }
     Ok(())
+}
+
+fn modified_ms(meta: &fs::Metadata) -> u64 {
+    meta.modified()
+        .ok()
+        .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
+        .map_or(0, |since| since.as_millis() as u64)
 }
 
 fn is_hidden(path: &Path) -> bool {
@@ -395,6 +405,7 @@ mod tests {
         assert_eq!(scan.images[1].caption, "");
         assert_eq!(scan.images[4].caption, "inside");
         assert_eq!(scan.unreadable, 0);
+        assert!(scan.images.iter().all(|image| image.modified > 0));
 
         write_caption_file(&dir.join("b.txt"), "solo").unwrap();
         let again = scan_folder(&dir).unwrap();

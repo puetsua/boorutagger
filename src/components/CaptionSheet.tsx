@@ -237,7 +237,7 @@ export function CaptionSheet({
           </button>
         </form>
         {count === 1 && taggerReady && preview && (
-          <AiTags key={preview.path} path={preview.path} owned={ownedTags} onSuggest={onSuggest} onAdd={onAddTag} />
+          <AiTags key={preview.src} path={preview.path} owned={ownedTags} onSuggest={onSuggest} onAdd={onAddTag} />
         )}
         {referenceTags.some((tag) => !ownedTags.has(tag)) && (
           <div className="tag-block ref-tags">

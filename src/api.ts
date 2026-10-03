@@ -14,6 +14,7 @@ export type ScannedImage = {
   path: string;
   captionPath: string;
   caption: string;
+  modified: number;
 };
 
 export type ScanResult = {
@@ -81,8 +82,10 @@ export function suggestTags(path: string, folder: string | null, threshold: numb
   return invoke<string[]>("suggest_tags", { path, folder, threshold });
 }
 
-export function imageSrc(path: string): string {
-  return convertFileSrc(path);
+// The version changes the URL when the file changes, so the webview drops its cached copy.
+export function imageSrc(path: string, version?: number): string {
+  const src = convertFileSrc(path);
+  return version ? `${src}?v=${version}` : src;
 }
 
 export function errorMessage(err: unknown): string {
