@@ -5,6 +5,7 @@ import { CaptionSheet } from "./components/CaptionSheet";
 import { ImageGrid } from "./components/ImageGrid";
 import { fileParts, ImageMenu, RenameDialog } from "./components/ImageMenu";
 import { ResizeEdges } from "./components/ResizeEdges";
+import { AboutDialog } from "./components/AboutDialog";
 import { SettingsDialog, type SettingsView } from "./components/SettingsDialog";
 import { StartScreen } from "./components/StartScreen";
 import { TopBar } from "./components/TopBar";
@@ -38,6 +39,7 @@ import { imageVisible, joinTags, moveItem, needsCaption, normTag, parseTags } fr
 import type { ImageItem } from "./types";
 import { useCaptionSaver } from "./useCaptionSaver";
 import { useTagger } from "./useTagger";
+import { useUpdater } from "./useUpdater";
 import "./App.css";
 
 function mergeImages(
@@ -148,6 +150,7 @@ export default function App() {
   const [imageMenu, setImageMenu] = useState<{ x: number; y: number; imageId: string } | null>(null);
   const [renameId, setRenameId] = useState<string | null>(null);
   const [zoomed, setZoomed] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
 
   const imagesRef = useRef(images);
   const folderRef = useRef<string | null>(null);
@@ -173,6 +176,7 @@ export default function App() {
 
   const { saveSoon, saveNow, flush, pendingCaption } = useCaptionSaver(setError);
   const tagger = useTagger(settings.taggerFolder);
+  const updater = useUpdater(flush);
   folderRef.current = folder;
 
   const pools = useMemo(() => poolsFor(settings.tagPools, folder), [settings.tagPools, folder]);
@@ -757,9 +761,11 @@ export default function App() {
       <TopBar
         folder={folder}
         busy={busy}
-        popupOpen={settingsOpen || zoomed || renameId !== null}
+        popupOpen={settingsOpen || aboutOpen || zoomed || renameId !== null}
         onOpen={() => void openFolder()}
         onSettings={setSettingsView}
+        onAbout={() => setAboutOpen(true)}
+        updateVersion={updater.update?.version ?? null}
       />
       {!folder ? (
         <StartScreen busy={busy} onOpen={() => void openFolder()} />
@@ -931,6 +937,7 @@ export default function App() {
       {renameImageItem && (
         <RenameDialog image={renameImageItem} onClose={() => setRenameId(null)} onSubmit={submitRename} />
       )}
+      {aboutOpen && <AboutDialog updater={updater} onClose={() => setAboutOpen(false)} />}
       <SettingsDialog
         view={settingsView}
         settings={settings}

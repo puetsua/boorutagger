@@ -11,9 +11,13 @@ type TopBarProps = {
   popupOpen: boolean;
   onOpen: () => void;
   onSettings: (view: SettingsView) => void;
+  onAbout: () => void;
+  updateVersion: string | null;
 };
 
-export function TopBar({ folder, busy, popupOpen, onOpen, onSettings }: TopBarProps) {
+type MenuPick = SettingsView | "about";
+
+export function TopBar({ folder, busy, popupOpen, onOpen, onSettings, onAbout, updateVersion }: TopBarProps) {
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
 
   return (
@@ -33,7 +37,7 @@ export function TopBar({ folder, busy, popupOpen, onOpen, onSettings }: TopBarPr
           type="button"
           disabled={popupOpen}
           aria-label="Settings"
-          title="Settings"
+          title={updateVersion ? `Settings. Version ${updateVersion} is available.` : "Settings"}
           aria-haspopup="menu"
           aria-expanded={menu !== null}
           // Keeps the menu's outside-click close from reopening it on the same click.
@@ -47,6 +51,7 @@ export function TopBar({ folder, busy, popupOpen, onOpen, onSettings }: TopBarPr
             <circle cx="12" cy="12" r="3" />
             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
           </svg>
+          {updateVersion && <span className="update-dot" aria-hidden="true" />}
         </button>
       </div>
       <div className="spacer" data-tauri-drag-region onDoubleClick={toggleMaximizeWindow} />
@@ -60,10 +65,12 @@ export function TopBar({ folder, busy, popupOpen, onOpen, onSettings }: TopBarPr
         <SettingsMenu
           x={menu.x}
           y={menu.y}
+          updateVersion={updateVersion}
           onClose={() => setMenu(null)}
-          onPick={(view) => {
+          onPick={(pick) => {
             setMenu(null);
-            onSettings(view);
+            if (pick === "about") onAbout();
+            else onSettings(pick);
           }}
         />
       )}
@@ -74,13 +81,15 @@ export function TopBar({ folder, busy, popupOpen, onOpen, onSettings }: TopBarPr
 function SettingsMenu({
   x,
   y,
+  updateVersion,
   onClose,
   onPick,
 }: {
   x: number;
   y: number;
+  updateVersion: string | null;
   onClose: () => void;
-  onPick: (view: SettingsView) => void;
+  onPick: (pick: MenuPick) => void;
 }) {
   const ref = useAnchoredMenu(x, y, onClose);
   return (
@@ -90,6 +99,15 @@ function SettingsMenu({
       </button>
       <button type="button" role="menuitem" onClick={() => onPick("general")}>
         Settings
+      </button>
+      <hr />
+      {updateVersion && (
+        <button className="update" type="button" role="menuitem" onClick={() => onPick("about")}>
+          Update to {updateVersion}
+        </button>
+      )}
+      <button type="button" role="menuitem" onClick={() => onPick("about")}>
+        About
       </button>
     </div>
   );

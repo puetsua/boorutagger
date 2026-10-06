@@ -1,6 +1,6 @@
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
-import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import type { UserConfig } from "./settings";
 
 export type RenamedImage = {
@@ -60,6 +60,13 @@ export function renameImage(path: string, fileName: string): Promise<RenamedImag
 
 export function revealImage(path: string): Promise<void> {
   return revealItemInDir(path);
+}
+
+export const REPO_URL = "https://github.com/puetsua/boorutagger";
+
+export async function openLink(url: string): Promise<void> {
+  if (inTauri()) await openUrl(url);
+  else window.open(url, "_blank", "noopener");
 }
 
 export function loadUserConfig(): Promise<{ config: UserConfig; exists: boolean }> {
