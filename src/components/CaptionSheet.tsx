@@ -1,6 +1,9 @@
-import { useEffect, useRef, useState, type DragEvent as ReactDragEvent, type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type DragEvent as ReactDragEvent, type MouseEvent, type ReactNode } from "react";
 import { errorMessage } from "../api";
 import { TagMenu } from "./ImageMenu";
+import { PoolToggles } from "./PoolToggles";
+import type { TagPool } from "../settings";
+import { reorderHandlers } from "../reorder";
 import { needsCaption, parseTags, sidecarName } from "../tags";
 import { GALLERY_DRAG_TYPE, type ImageItem } from "../types";
 
@@ -14,6 +17,9 @@ type CaptionSheetProps = {
   references: readonly ImageItem[];
   recentCount: number;
   recent: readonly string[];
+  pools: readonly TagPool[];
+  hiddenPools: readonly string[];
+  onTogglePool: (id: string) => void;
   error: string;
   taggerReady: boolean;
   onSuggest: (path: string) => Promise<string[]>;
@@ -43,6 +49,9 @@ export function CaptionSheet({
   references,
   recentCount,
   recent,
+  pools,
+  hiddenPools,
+  onTogglePool,
   error,
   taggerReady,
   onSuggest,
@@ -74,10 +83,26 @@ export function CaptionSheet({
     count === 1 ? singleTags : selectionTags.filter(([, have]) => have === count).map(([tag]) => tag),
   );
 
-  const [recentOpen, setRecentOpen] = useState(true);
+  // Folded sections stay folded while the selection changes.
+  const [folded, setFolded] = useState<ReadonlySet<string>>(new Set());
+  const fold = (name: string) => ({
+    open: !folded.has(name),
+    onToggle: () =>
+      setFolded((current) => {
+        const next = new Set(current);
+        if (!next.delete(name)) next.add(name);
+        return next;
+      }),
+  });
   const zoomRef = useRef<HTMLDialogElement>(null);
   const recentTags = recent.slice(0, recentCount);
   const referenceTags = referenceTagList(references);
+
+  // Dimmed suggestions are tags every selected image already has.
+  function toggleTag(tag: string) {
+    if (ownedTags.has(tag)) onRemoveTag(tag);
+    else onAddTag(tag);
+  }
 
   useEffect(() => {
     if ((!preview || count === 0) && zoomed) onCloseZoom();
@@ -253,38 +278,59 @@ export function CaptionSheet({
             </div>
           </div>
         )}
-        <References images={references} onAdd={onAddReference} onRemove={onRemoveReference} />
-        {recentCount > 0 && (
-          <div className="tag-block">
-            <h2>
-              <button
-                className="fold"
-                type="button"
-                aria-expanded={recentOpen}
-                onClick={() => setRecentOpen((open) => !open)}
-              >
-                <span className="fold-mark" />
-                Last tags used
-              </button>
-            </h2>
-            {recentOpen &&
-              (recentTags.length === 0 ? (
-                <p className="hint-line">Tags you add show up here, newest first.</p>
-              ) : (
-                <div className="suggest">
-                  {recentTags.map((tag) => (
-                    <button
-                      key={tag}
-                      type="button"
-                      className={ownedTags.has(tag) ? "present" : undefined}
-                      onClick={() => onAddTag(tag)}
-                    >
-                      {tag}
-                    </button>
-                  ))}
+        <FoldBlock title="Reference images" {...fold("references")}>
+          <References images={references} onAdd={onAddReference} onRemove={onRemoveReference} />
+        </FoldBlock>
+        {pools.length > 0 && (
+          <FoldBlock title="Tag pools" {...fold("pools")}>
+            <PoolToggles
+              pools={pools}
+              label="Tag pools to show"
+              active={(id) => !hiddenPools.includes(id)}
+              onToggle={onTogglePool}
+            />
+            {pools
+              .filter((pool) => !hiddenPools.includes(pool.id))
+              .map((pool) => (
+                <div className="pool-suggest" key={pool.id}>
+                  <p className="section">{pool.name}</p>
+                  <div className="suggest">
+                    {pool.tags.map((tag) => (
+                      <button
+                        key={tag}
+                        type="button"
+                        className={ownedTags.has(tag) ? "present" : undefined}
+                        title={ownedTags.has(tag) ? "Remove tag" : undefined}
+                        onClick={() => toggleTag(tag)}
+                      >
+                        {tag}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               ))}
-          </div>
+          </FoldBlock>
+        )}
+        {recentCount > 0 && (
+          <FoldBlock title="Last tags used" {...fold("recent")}>
+            {recentTags.length === 0 ? (
+              <p className="hint-line">Tags you add show up here, newest first.</p>
+            ) : (
+              <div className="suggest">
+                {recentTags.map((tag) => (
+                  <button
+                    key={tag}
+                    type="button"
+                    className={ownedTags.has(tag) ? "present" : undefined}
+                    title={ownedTags.has(tag) ? "Remove tag" : undefined}
+                    onClick={() => toggleTag(tag)}
+                  >
+                    {tag}
+                  </button>
+                ))}
+              </div>
+            )}
+          </FoldBlock>
         )}
         {showSidecar && preview && (
           <label className="field" htmlFor="caption">
@@ -395,49 +441,70 @@ function References({
   const [over, setOver] = useState(false);
 
   return (
+    <div
+      className={over ? "ref-drop over" : "ref-drop"}
+      onDragEnter={(event) => {
+        if (!isGalleryDrag(event)) return;
+        event.preventDefault();
+        setOver(true);
+      }}
+      onDragOver={(event) => {
+        if (!isGalleryDrag(event)) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "copy";
+        setOver(true);
+      }}
+      onDragLeave={(event) => {
+        if (event.currentTarget.contains(event.relatedTarget as Node)) return;
+        setOver(false);
+      }}
+      onDrop={(event) => {
+        const id = galleryDragId(event);
+        setOver(false);
+        if (!id) return;
+        event.preventDefault();
+        onAdd(id);
+      }}
+    >
+      {images.length === 0 ? (
+        <p className="hint-line">Drop tagged images from the gallery.</p>
+      ) : (
+        images.map((image) => (
+          <div className="ref-row" key={image.id}>
+            <span className="thumb">
+              <img src={image.src} alt="" draggable={false} />
+            </span>
+            <span className="ref-name">{image.name}</span>
+            <button className="quiet warn" type="button" onClick={() => onRemove(image.id)}>
+              Remove
+            </button>
+          </div>
+        ))
+      )}
+    </div>
+  );
+}
+
+function FoldBlock({
+  title,
+  open,
+  onToggle,
+  children,
+}: {
+  title: string;
+  open: boolean;
+  onToggle: () => void;
+  children: ReactNode;
+}) {
+  return (
     <div className="tag-block">
-      <h2>Reference images</h2>
-      <div
-        className={over ? "ref-drop over" : "ref-drop"}
-        onDragEnter={(event) => {
-          if (!isGalleryDrag(event)) return;
-          event.preventDefault();
-          setOver(true);
-        }}
-        onDragOver={(event) => {
-          if (!isGalleryDrag(event)) return;
-          event.preventDefault();
-          event.dataTransfer.dropEffect = "copy";
-          setOver(true);
-        }}
-        onDragLeave={(event) => {
-          if (event.currentTarget.contains(event.relatedTarget as Node)) return;
-          setOver(false);
-        }}
-        onDrop={(event) => {
-          const id = galleryDragId(event);
-          setOver(false);
-          if (!id) return;
-          event.preventDefault();
-          onAdd(id);
-        }}
-      >
-        {images.length === 0 ? (
-          <p className="hint-line">Drop tagged images from the gallery.</p>
-        ) : (
-          images.map((image) => (
-            <div className="ref-row" key={image.id}>
-              <span className="thumb">
-                <img src={image.src} alt="" draggable={false} />
-              </span>
-              <span className="ref-name">{image.name}</span>
-              <button className="quiet warn" type="button" onClick={() => onRemove(image.id)}>
-                Remove
-              </button>
-            </div>
-          ))
-        )}
-      </div>
+      <h2>
+        <button className="fold" type="button" aria-expanded={open} onClick={onToggle}>
+          <span className="fold-mark" />
+          {title}
+        </button>
+      </h2>
+      {open && children}
     </div>
   );
 }
@@ -623,184 +690,4 @@ function FolderStats({
       )}
     </div>
   );
-}
-
-type ActiveDrag = {
-  from: number;
-  over: number;
-  onMove: (from: number, to: number) => void;
-  pointerId: number;
-  horizontal: boolean;
-  startX: number;
-  startY: number;
-  started: boolean;
-  ghost: HTMLElement | null;
-  marker: HTMLElement | null;
-};
-
-let activeDrag: ActiveDrag | null = null;
-
-function reorderNodes(parent: HTMLElement): HTMLElement[] {
-  return [...parent.querySelectorAll<HTMLElement>(":scope > [data-reorder-index]")];
-}
-
-function insertionIndex(parent: HTMLElement, x: number, y: number, horizontal: boolean, from: number): number {
-  const nodes = reorderNodes(parent);
-  let best: { index: number; box: DOMRect; dist: number } | null = null;
-  for (const node of nodes) {
-    const index = Number(node.dataset.reorderIndex);
-    if (index === from) continue;
-    const box = node.getBoundingClientRect();
-    const nearestX = Math.max(box.left, Math.min(x, box.right));
-    const nearestY = Math.max(box.top, Math.min(y, box.bottom));
-    const dist = (x - nearestX) ** 2 + (y - nearestY) ** 2;
-    if (!best || dist < best.dist) best = { index, box, dist };
-  }
-  if (!best) return from;
-  const before = horizontal
-    ? x < best.box.left + best.box.width / 2
-    : y < best.box.top + best.box.height / 2;
-  const gap = before ? best.index : best.index + 1;
-  const to = gap <= from ? gap : gap - 1;
-  return Math.max(0, Math.min(to, nodes.length - 1));
-}
-
-function makeGhost(source: HTMLElement): HTMLElement {
-  const ghost = document.createElement("span");
-  ghost.className = "chip tag-ghost";
-  const label = source.querySelector(".tag, .tagname");
-  const text = document.createElement("span");
-  text.className = "tag";
-  text.textContent = label?.textContent ?? "";
-  ghost.appendChild(text);
-  document.body.appendChild(ghost);
-  return ghost;
-}
-
-function placeGhost(ghost: HTMLElement, x: number, y: number) {
-  ghost.style.left = `${x}px`;
-  ghost.style.top = `${y}px`;
-}
-
-function placeMarker(marker: HTMLElement, parent: HTMLElement, to: number, from: number, horizontal: boolean) {
-  const node = reorderNodes(parent).find((item) => Number(item.dataset.reorderIndex) === to);
-  if (!node) {
-    marker.hidden = true;
-    return;
-  }
-  marker.hidden = false;
-  const box = node.getBoundingClientRect();
-  const after = to > from;
-  if (horizontal) {
-    const edge = after ? box.right + 3 : box.left - 3;
-    marker.style.left = `${edge - 1}px`;
-    marker.style.top = `${box.top}px`;
-    marker.style.width = "2px";
-    marker.style.height = `${box.height}px`;
-  } else {
-    const edge = after ? box.bottom + 2 : box.top - 2;
-    marker.style.left = `${box.left}px`;
-    marker.style.top = `${edge - 1}px`;
-    marker.style.width = `${box.width}px`;
-    marker.style.height = "2px";
-  }
-}
-
-function beginReorder(source: HTMLElement, x: number, y: number) {
-  if (!activeDrag || activeDrag.started) return;
-  activeDrag.started = true;
-  source.classList.add("dragging");
-  const ghost = makeGhost(source);
-  const marker = document.createElement("div");
-  marker.className = "tag-insert";
-  document.body.appendChild(marker);
-  activeDrag.ghost = ghost;
-  activeDrag.marker = marker;
-  placeGhost(ghost, x, y);
-  const parent = source.parentElement;
-  if (parent) placeMarker(marker, parent, activeDrag.over, activeDrag.from, activeDrag.horizontal);
-}
-
-function finishReorder(node: HTMLElement) {
-  node.classList.remove("dragging");
-  activeDrag?.ghost?.remove();
-  activeDrag?.marker?.remove();
-  if (node.hasPointerCapture?.(activeDrag?.pointerId ?? -1)) {
-    try {
-      node.releasePointerCapture(activeDrag!.pointerId);
-    } catch {
-      /* pointer already released */
-    }
-  }
-  activeDrag = null;
-}
-
-function reorderHandlers(
-  index: number,
-  count: number,
-  horizontal: boolean,
-  onMove: (from: number, to: number) => void,
-) {
-  return {
-    tabIndex: 0,
-    "data-reorder-index": String(index),
-    onPointerDown(event: PointerEvent<HTMLElement>) {
-      if (event.button !== 0) return;
-      if ((event.target as HTMLElement).closest("button")) return;
-      event.preventDefault();
-      try {
-        event.currentTarget.setPointerCapture(event.pointerId);
-      } catch {
-        /* pointer capture is unavailable for this event */
-      }
-      event.currentTarget.focus();
-      activeDrag = {
-        from: index,
-        over: index,
-        onMove,
-        pointerId: event.pointerId,
-        horizontal,
-        startX: event.clientX,
-        startY: event.clientY,
-        started: false,
-        ghost: null,
-        marker: null,
-      };
-    },
-    onPointerMove(event: PointerEvent<HTMLElement>) {
-      if (!activeDrag || activeDrag.pointerId !== event.pointerId) return;
-      const moved = Math.hypot(event.clientX - activeDrag.startX, event.clientY - activeDrag.startY);
-      if (!activeDrag.started) {
-        if (moved < 4) return;
-        beginReorder(event.currentTarget, event.clientX, event.clientY);
-      }
-      const parent = event.currentTarget.parentElement;
-      if (!parent || !activeDrag.ghost || !activeDrag.marker) return;
-      placeGhost(activeDrag.ghost, event.clientX, event.clientY);
-      const to = insertionIndex(parent, event.clientX, event.clientY, activeDrag.horizontal, activeDrag.from);
-      activeDrag.over = to;
-      placeMarker(activeDrag.marker, parent, to, activeDrag.from, activeDrag.horizontal);
-    },
-    onPointerUp(event: PointerEvent<HTMLElement>) {
-      if (!activeDrag || activeDrag.pointerId !== event.pointerId) return;
-      const { from, over, onMove: move, started } = activeDrag;
-      finishReorder(event.currentTarget);
-      if (started && over !== from) move(from, over);
-    },
-    onPointerCancel(event: PointerEvent<HTMLElement>) {
-      if (!activeDrag || activeDrag.pointerId !== event.pointerId) return;
-      finishReorder(event.currentTarget);
-    },
-    onKeyDown(event: KeyboardEvent<HTMLElement>) {
-      const previous = horizontal ? "ArrowLeft" : "ArrowUp";
-      const next = horizontal ? "ArrowRight" : "ArrowDown";
-      if (event.key !== previous && event.key !== next) return;
-      if ((event.target as HTMLElement).closest("button")) return;
-      event.preventDefault();
-      event.stopPropagation();
-      const to = index + (event.key === previous ? -1 : 1);
-      if (to < 0 || to >= count) return;
-      onMove(index, to);
-    },
-  };
 }

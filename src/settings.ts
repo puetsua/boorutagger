@@ -5,6 +5,8 @@ const MAX_FOLDERS = 30;
 const MAX_FILTER_TAGS = 40;
 const MAX_PRESETS = 30;
 const MAX_PRESET_NAME = 40;
+const MAX_POOLS = 50;
+const MAX_POOL_TAGS = 100;
 export const MIN_THRESHOLD = 5;
 export const MAX_THRESHOLD = 95;
 
@@ -21,11 +23,20 @@ export type Settings = {
   recent: string[];
   taggerFolder: string | null;
   taggerThreshold: number;
+  tagPools: TagPool[];
+};
+
+export type TagPool = {
+  id: string;
+  name: string;
+  tags: string[];
+  folder: string | null;
 };
 
 export type FolderFilters = {
   hasTags: string[];
   missingTags: string[];
+  hiddenPools: string[];
 };
 
 export type FilterPreset = {
@@ -48,6 +59,7 @@ export const DEFAULT_SETTINGS: Settings = {
   recent: [],
   taggerFolder: null,
   taggerThreshold: 35,
+  tagPools: [],
 };
 
 export function parseGalleryView(value: unknown): GalleryView {
@@ -64,7 +76,32 @@ export function parseSettings(raw: unknown): Settings {
     recent: cleanTagList(parsed.recent, 20),
     taggerFolder: typeof parsed.taggerFolder === "string" && parsed.taggerFolder.trim() ? parsed.taggerFolder.trim() : null,
     taggerThreshold: clampThreshold(parsed.taggerThreshold ?? DEFAULT_SETTINGS.taggerThreshold),
+    tagPools: parseTagPools(parsed.tagPools),
   };
+}
+
+function parseTagPools(raw: unknown): TagPool[] {
+  if (!Array.isArray(raw)) return [];
+  const pools: TagPool[] = [];
+  const ids = new Set<string>();
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const parsed = item as Partial<TagPool>;
+    const id = typeof parsed.id === "string" ? parsed.id.trim() : "";
+    const name = cleanPresetName(parsed.name);
+    const tags = cleanTagList(parsed.tags, MAX_POOL_TAGS);
+    if (!id || !name || !tags.length || ids.has(id)) continue;
+    ids.add(id);
+    const folder = typeof parsed.folder === "string" ? folderKey(parsed.folder) || null : null;
+    pools.push({ id, name, tags, folder });
+    if (pools.length === MAX_POOLS) break;
+  }
+  return pools;
+}
+
+export function poolsFor(pools: readonly TagPool[], folder: string | null): TagPool[] {
+  const key = folder ? folderKey(folder) : "";
+  return [...pools.filter((pool) => !pool.folder), ...pools.filter((pool) => key && pool.folder === key)];
 }
 
 export function clampThreshold(value: string | number): number {
@@ -89,6 +126,7 @@ export function parseFolderFilters(raw: unknown): Record<string, FolderFilters> 
     out[key] = {
       hasTags: cleanFilterTags(parsed.hasTags),
       missingTags: cleanFilterTags(parsed.missingTags),
+      hiddenPools: cleanIds(parsed.hiddenPools),
     };
   }
   return out;
@@ -106,6 +144,7 @@ export function rememberFolderFilters(
   folder: string,
   hasTags: readonly string[],
   missingTags: readonly string[],
+  hiddenPools: readonly string[],
 ): Record<string, FolderFilters> {
   const key = folderKey(folder);
   if (!key) return current;
@@ -118,8 +157,18 @@ export function rememberFolderFilters(
   const kept = Object.entries(next).slice(-(MAX_FOLDERS - 1));
   return {
     ...Object.fromEntries(kept),
-    [key]: { hasTags: cleanFilterTags(hasTags), missingTags: cleanFilterTags(missingTags) },
+    [key]: {
+      hasTags: cleanFilterTags(hasTags),
+      missingTags: cleanFilterTags(missingTags),
+      hiddenPools: cleanIds(hiddenPools),
+    },
   };
+}
+
+function cleanIds(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const ids = raw.filter((item): item is string => typeof item === "string").map((item) => item.trim());
+  return [...new Set(ids.filter(Boolean))].slice(0, MAX_POOLS);
 }
 
 function cleanFilterTags(raw: unknown): string[] {

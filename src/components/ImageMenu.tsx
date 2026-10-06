@@ -136,7 +136,7 @@ export function TagMenu({ x, y, tag, onClose, onHas, onWithout, onOnly, onCopy, 
   );
 }
 
-function useAnchoredMenu(x: number, y: number, onClose: () => void) {
+export function useAnchoredMenu(x: number, y: number, onClose: () => void) {
   const ref = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {

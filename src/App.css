@@ -237,19 +237,20 @@ button:disabled { opacity: 0.45; cursor: default; }
   color: var(--fg-3);
 }
 .filters h2 + .kicker { margin-top: 10px; }
-.filters input, .sheet input[type="text"], .sheet textarea {
+.filters input, .sheet input[type="text"], .sheet textarea,
+.settings input[type="text"], .settings textarea {
   width: 100%;
   border-radius: var(--radius);
   padding: 6px 8px;
   font-family: var(--mono);
   font-size: 12px;
 }
-.filters input {
+.filters input, .settings input[type="text"], .settings textarea {
   background: var(--bg-2);
   border: 1px solid var(--stroke);
   color: var(--fg-1);
 }
-.filters input::placeholder {
+.filters input::placeholder, .settings input[type="text"]::placeholder, .settings textarea::placeholder {
   font-family: var(--sans);
   font-size: 12px;
 }
@@ -316,18 +317,6 @@ button:disabled { opacity: 0.45; cursor: default; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.preset-remove {
-  flex: none;
-  width: 22px;
-  height: 22px;
-  border: 0;
-  border-radius: var(--radius);
-  background: transparent;
-  color: var(--warning);
-  font-size: 14px;
-  line-height: 1;
-}
-.preset-remove:hover { background: var(--bg-hover); color: var(--warning); }
 .preset-name { margin-top: 6px; }
 .preset-row .preset-name {
   flex: 1;
@@ -429,6 +418,8 @@ button:disabled { opacity: 0.45; cursor: default; }
   place-items: center;
 }
 .icon-btn:hover:not(:disabled) { background: var(--bg-hover); }
+.icon-btn[aria-pressed="false"] { color: var(--fg-3); }
+.icon-btn[aria-pressed="true"] { background: var(--brand-subtle); color: var(--brand); }
 .icon-btn svg {
   width: 16px;
   height: 16px;
@@ -442,6 +433,7 @@ button:disabled { opacity: 0.45; cursor: default; }
   flex: 1;
   min-height: 0;
   overflow: auto;
+  scrollbar-gutter: stable;
   padding: 4px 12px 16px;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(108px, 1fr));
@@ -764,7 +756,7 @@ dialog.zoom[open] {
 }
 .chip:active { cursor: grabbing; }
 .chip, .trow[data-reorder-index] { touch-action: none; user-select: none; }
-.chip.dragging, .trow.dragging { opacity: 0.28; }
+.chip.dragging, .trow.dragging, .pool-edit.dragging { opacity: 0.28; }
 .tag-ghost {
   position: fixed;
   z-index: 40;
@@ -957,9 +949,10 @@ dialog.settings[open] form {
   flex: 1;
   min-height: 0;
 }
-dialog.settings form > .quiet { margin-top: auto; }
 dialog form { display: flex; flex-direction: column; }
 dialog h2 { margin: 0 0 12px; font-size: 16px; }
+.dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: -4px -4px 8px 0; }
+.dialog-head h2 { margin: 0; }
 .setting { display: flex; flex-direction: column; gap: 4px; margin: 0 0 14px; font-size: 14px; font-weight: 600; }
 .setting p { margin: 0; font-size: 12px; font-weight: 500; color: var(--fg-3); line-height: 1.4; }
 .slider-head {
@@ -1039,6 +1032,26 @@ dialog h2 { margin: 0 0 12px; font-size: 16px; }
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.pool-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 8px;
+  border: 1px solid var(--stroke-2);
+  border-radius: var(--radius);
+}
+.pool-edit.global { background: var(--brand-subtle); border-color: transparent; }
+.pool-head { display: flex; align-items: center; gap: 6px; }
+.pool-head input[type="text"] { flex: 1; min-width: 0; font-weight: 400; }
+.pool-warn { flex: 1; min-width: 0; padding: 6px 0; border: 1px solid transparent; font-size: 12px; line-height: 1.4; font-weight: 500; color: var(--warning); }
+.pool-add { align-self: flex-end; }
+.pool-edit[data-reorder-index] { cursor: grab; touch-action: none; }
+.pool-grip { display: grid; place-items: center; flex: none; width: 16px; height: 28px; color: var(--fg-3); }
+.pool-grip svg { width: 16px; height: 16px; fill: currentColor; stroke: currentColor; }
+.pool-edit textarea { min-height: 56px; line-height: 1.5; font-weight: 400; resize: vertical; }
+.sheet .pool-toggles { margin: 0 0 4px; }
+.pool-suggest { margin-top: 12px; }
 .model-state { padding: 0 7px; font-size: 12px; color: var(--fg-2); }
 .setting .model-error { margin-top: 4px; color: var(--artist); }
 .choices {
@@ -1162,7 +1175,8 @@ dialog form > .quiet { align-self: flex-end; }
   font-weight: 500;
 }
 .menu button.warn,
-.quiet.warn { color: var(--warning); }
+.quiet.warn,
+.icon-btn.warn { color: var(--warning); }
 .menu button:hover:not(:disabled),
 .menu button:focus-visible { background: var(--bg-hover); }
 .menu hr {

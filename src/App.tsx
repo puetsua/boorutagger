@@ -5,7 +5,7 @@ import { CaptionSheet } from "./components/CaptionSheet";
 import { ImageGrid } from "./components/ImageGrid";
 import { fileParts, ImageMenu, RenameDialog } from "./components/ImageMenu";
 import { ResizeEdges } from "./components/ResizeEdges";
-import { SettingsDialog } from "./components/SettingsDialog";
+import { SettingsDialog, type SettingsView } from "./components/SettingsDialog";
 import { StartScreen } from "./components/StartScreen";
 import { TopBar } from "./components/TopBar";
 import { WorkingSet } from "./components/WorkingSet";
@@ -20,6 +20,7 @@ import {
   parseFilterPresets,
   parseFolderFilters,
   parseSettings,
+  poolsFor,
   presetMatches,
   readLegacyLocal,
   rememberFolderFilters,
@@ -133,13 +134,15 @@ export default function App() {
   const [onlyEmpty, setOnlyEmpty] = useState(false);
   const [hasTags, setHasTags] = useState<string[]>([]);
   const [missingTags, setMissingTags] = useState<string[]>([]);
+  const [hiddenPools, setHiddenPools] = useState<string[]>([]);
   const [filterPresets, setFilterPresets] = useState<FilterPreset[]>(() => (inTauri() ? [] : loadFilterPresets()));
   const [armedPresetId, setArmedPresetId] = useState("");
   const [error, setError] = useState("");
   const [referenceIds, setReferenceIds] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [settings, setSettings] = useState<Settings>(() => (inTauri() ? DEFAULT_SETTINGS : loadSettings()));
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsView, setSettingsView] = useState<SettingsView | null>(null);
+  const settingsOpen = settingsView !== null;
   const [resetToken, setResetToken] = useState(0);
   const [focusToken, setFocusToken] = useState<{ selector: string; nonce: number } | null>(null);
   const [imageMenu, setImageMenu] = useState<{ x: number; y: number; imageId: string } | null>(null);
@@ -172,6 +175,7 @@ export default function App() {
   const tagger = useTagger(settings.taggerFolder);
   folderRef.current = folder;
 
+  const pools = useMemo(() => poolsFor(settings.tagPools, folder), [settings.tagPools, folder]);
   const filters = useMemo(
     () => ({ query, needsCaption: onlyEmpty, hasTags, missingTags }),
     [query, onlyEmpty, hasTags, missingTags],
@@ -233,13 +237,14 @@ export default function App() {
     if (
       saved &&
       sameFilterTags(saved.hasTags, hasTags) &&
-      sameFilterTags(saved.missingTags, missingTags)
+      sameFilterTags(saved.missingTags, missingTags) &&
+      sameFilterTags(saved.hiddenPools, hiddenPools)
     ) {
       return;
     }
-    folderFiltersRef.current = rememberFolderFilters(folderFiltersRef.current, folder, hasTags, missingTags);
+    folderFiltersRef.current = rememberFolderFilters(folderFiltersRef.current, folder, hasTags, missingTags, hiddenPools);
     persistConfig(settingsRef.current, lastFolderRef.current);
-  }, [folder, hasTags, missingTags, persistConfig]);
+  }, [folder, hasTags, missingTags, hiddenPools, persistConfig]);
 
   useEffect(() => {
     if (!configReadyRef.current) return;
@@ -265,6 +270,7 @@ export default function App() {
     const saved = lookupFolderFilters(folderFiltersRef.current, nextFolder);
     const restoredHas = saved?.hasTags ?? [];
     const restoredMissing = saved?.missingTags ?? [];
+    const restoredHidden = saved?.hiddenPools ?? [];
     setFolder(nextFolder);
     setImages(nextImages);
     setSelected(new Set());
@@ -274,6 +280,7 @@ export default function App() {
     setOnlyEmpty(false);
     setHasTags(restoredHas);
     setMissingTags(restoredMissing);
+    setHiddenPools(restoredHidden);
     setReferenceIds([]);
     setImageMenu(null);
     setRenameId(null);
@@ -752,7 +759,7 @@ export default function App() {
         busy={busy}
         popupOpen={settingsOpen || zoomed || renameId !== null}
         onOpen={() => void openFolder()}
-        onSettings={() => setSettingsOpen(true)}
+        onSettings={setSettingsView}
       />
       {!folder ? (
         <StartScreen busy={busy} onOpen={() => void openFolder()} />
@@ -765,6 +772,7 @@ export default function App() {
           query={query}
           hasTags={hasTags}
           missingTags={missingTags}
+          pools={pools}
           presets={filterPresets}
           activePreset={folder ? activePreset : ""}
           activeSavedId={folder ? activeSavedId : ""}
@@ -781,13 +789,11 @@ export default function App() {
             setArmedPresetId((current) => (current === id ? "" : current));
           }}
           onAddFilter={(kind, raw) => {
-            const tag = normTag(raw);
-            if (!tag) return;
-            if (kind === "has") {
-              setHasTags(hasTags.includes(tag) ? hasTags : [...hasTags, tag]);
-            } else {
-              setMissingTags(missingTags.includes(tag) ? missingTags : [...missingTags, tag]);
-            }
+            const current = kind === "has" ? hasTags : missingTags;
+            const added = parseTags(raw).filter((tag) => !current.includes(tag));
+            if (!added.length) return;
+            if (kind === "has") setHasTags([...hasTags, ...added]);
+            else setMissingTags([...missingTags, ...added]);
           }}
           onRemoveFilter={(kind, tag) => {
             if (kind === "has") setHasTags(hasTags.filter((item) => item !== tag));
@@ -833,6 +839,11 @@ export default function App() {
           })}
           recentCount={settings.recentCount}
           recent={settings.recent}
+          pools={pools}
+          hiddenPools={hiddenPools}
+          onTogglePool={(id) =>
+            setHiddenPools((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]))
+          }
           error={error}
           taggerReady={tagger.status?.installed === true}
           onSuggest={suggestFor}
@@ -921,9 +932,10 @@ export default function App() {
         <RenameDialog image={renameImageItem} onClose={() => setRenameId(null)} onSubmit={submitRename} />
       )}
       <SettingsDialog
-        open={settingsOpen}
+        view={settingsView}
         settings={settings}
-        onClose={() => setSettingsOpen(false)}
+        folder={folder}
+        onClose={() => setSettingsView(null)}
         onChange={setSettings}
         tagger={tagger}
         onPickModelFolder={() => void pickModelFolder()}

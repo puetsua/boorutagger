@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import type { FilterPreset } from "../settings";
+import type { FilterPreset, TagPool } from "../settings";
+import { useAnchoredMenu } from "./ImageMenu";
 
 type WorkingSetProps = {
   total: number;
@@ -8,6 +9,7 @@ type WorkingSetProps = {
   query: string;
   hasTags: readonly string[];
   missingTags: readonly string[];
+  pools: readonly TagPool[];
   presets: readonly FilterPreset[];
   activePreset: "all" | "empty" | "";
   activeSavedId: string;
@@ -32,6 +34,7 @@ export function WorkingSet({
   query,
   hasTags,
   missingTags,
+  pools,
   presets,
   activePreset,
   activeSavedId,
@@ -54,15 +57,36 @@ export function WorkingSet({
   const [presetName, setPresetName] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
+  const [presetMenu, setPresetMenu] = useState<{ id: string; x: number; y: number } | null>(null);
   const skipSave = useRef(false);
   const canSave = !activeSavedId && (hasTags.length > 0 || missingTags.length > 0);
-  const filtering = Boolean(query.trim()) || hasTags.length > 0 || missingTags.length > 0 || activePreset === "empty";
+  const filtering = Boolean(query.trim()) || activePreset !== "all";
   const selectedPresetId = activeSavedId || overridePreset?.id || "";
 
   useEffect(() => {
     setHasDraft("");
     setMissDraft("");
   }, [resetToken]);
+
+  // "/Pool name" adds every tag in that pool; an unknown pool keeps the text.
+  function submitFilter(kind: "has" | "missing", draft: string): boolean {
+    const raw = draft.trim();
+    if (!raw.startsWith("/")) {
+      onAddFilter(kind, draft);
+      return true;
+    }
+    const name = raw.slice(1).trim().toLowerCase();
+    const pool = pools.find((item) => item.name.toLowerCase() === name);
+    if (pool) onAddFilter(kind, pool.tags.join(","));
+    return Boolean(pool);
+  }
+
+  // A pick from the suggestion list arrives as a replacement, not typed text.
+  function changeDraft(kind: "has" | "missing", value: string, event: Event, setDraft: (value: string) => void) {
+    const picked = !(event instanceof InputEvent) || event.inputType === "insertReplacementText";
+    if (picked && value.startsWith("/") && submitFilter(kind, value)) setDraft("");
+    else setDraft(value);
+  }
 
   function startNaming() {
     setPresetName(suggestPresetName(hasTags, missingTags));
@@ -176,18 +200,14 @@ export function WorkingSet({
                 else onApplySaved(preset.id);
               }}
               onDoubleClick={() => startRename(preset)}
+              onContextMenu={(event) => {
+                event.preventDefault();
+                setPresetMenu({ id: preset.id, x: event.clientX, y: event.clientY });
+              }}
             >
               {preset.name}
             </button>
           )}
-          <button
-            className="preset-remove"
-            type="button"
-            aria-label={`Remove preset ${preset.name}`}
-            onClick={() => onRemovePreset(preset.id)}
-          >
-            ×
-          </button>
         </div>
       ))}
       {canSave && !naming && (
@@ -244,36 +264,39 @@ export function WorkingSet({
       <FilterChips tags={hasTags} kind="has" onRemove={onRemoveFilter} />
       <input
         type="text"
-        list="vocab"
-        placeholder="Add a tag to filter images"
+        list={hasDraft.startsWith("/") ? "pool-commands" : "vocab"}
+        placeholder="Add a tag, or / for a tag pool"
         spellCheck={false}
         autoComplete="off"
         value={hasDraft}
-        onChange={(event) => setHasDraft(event.target.value)}
+        onChange={(event) => changeDraft("has", event.target.value, event.nativeEvent, setHasDraft)}
         onKeyDown={(event) => {
           if (event.key !== "Enter") return;
           event.preventDefault();
-          onAddFilter("has", hasDraft);
-          setHasDraft("");
+          if (submitFilter("has", hasDraft)) setHasDraft("");
         }}
       />
       <div className="kicker">Without tag</div>
       <FilterChips tags={missingTags} kind="missing" onRemove={onRemoveFilter} />
       <input
         type="text"
-        list="vocab"
-        placeholder="Add a tag to filter images"
+        list={missDraft.startsWith("/") ? "pool-commands" : "vocab"}
+        placeholder="Add a tag, or / for a tag pool"
         spellCheck={false}
         autoComplete="off"
         value={missDraft}
-        onChange={(event) => setMissDraft(event.target.value)}
+        onChange={(event) => changeDraft("missing", event.target.value, event.nativeEvent, setMissDraft)}
         onKeyDown={(event) => {
           if (event.key !== "Enter") return;
           event.preventDefault();
-          onAddFilter("missing", missDraft);
-          setMissDraft("");
+          if (submitFilter("missing", missDraft)) setMissDraft("");
         }}
       />
+      <datalist id="pool-commands">
+        {pools.map((pool) => (
+          <option key={pool.id} value={`/${pool.name}`} />
+        ))}
+      </datalist>
       {filtering && (
         <button
           className="preset clear-filters"
@@ -291,6 +314,17 @@ export function WorkingSet({
       <div className="shown">
         {shown} of {total} shown
       </div>
+      {presetMenu && (
+        <PresetMenu
+          x={presetMenu.x}
+          y={presetMenu.y}
+          onClose={() => setPresetMenu(null)}
+          onRemove={() => {
+            onRemovePreset(presetMenu.id);
+            setPresetMenu(null);
+          }}
+        />
+      )}
     </aside>
   );
 }
@@ -306,6 +340,17 @@ function presetDetail(preset: FilterPreset): string {
   if (preset.hasTags.length) parts.push(`Has ${preset.hasTags.join(", ")}`);
   if (preset.missingTags.length) parts.push(`Without ${preset.missingTags.join(", ")}`);
   return parts.join(". ");
+}
+
+function PresetMenu({ x, y, onClose, onRemove }: { x: number; y: number; onClose: () => void; onRemove: () => void }) {
+  const ref = useAnchoredMenu(x, y, onClose);
+  return (
+    <div ref={ref} className="menu" role="menu" aria-label="Preset actions" style={{ left: x, top: y }}>
+      <button className="warn" type="button" role="menuitem" onClick={onRemove}>
+        Remove preset
+      </button>
+    </div>
+  );
 }
 
 function FilterChips({

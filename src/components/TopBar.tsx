@@ -1,4 +1,7 @@
+import { useState } from "react";
 import mark from "../../src-tauri/icons/32x32.png";
+import { useAnchoredMenu } from "./ImageMenu";
+import type { SettingsView } from "./SettingsDialog";
 import { TitleControls } from "./TitleControls";
 import { toggleMaximizeWindow } from "../window";
 
@@ -7,10 +10,12 @@ type TopBarProps = {
   busy: boolean;
   popupOpen: boolean;
   onOpen: () => void;
-  onSettings: () => void;
+  onSettings: (view: SettingsView) => void;
 };
 
 export function TopBar({ folder, busy, popupOpen, onOpen, onSettings }: TopBarProps) {
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+
   return (
     <header className="top">
       <div className="brand" data-tauri-drag-region onDoubleClick={toggleMaximizeWindow}>
@@ -23,7 +28,21 @@ export function TopBar({ folder, busy, popupOpen, onOpen, onSettings }: TopBarPr
             <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
           </svg>
         </button>
-        <button className="icon-btn" type="button" onClick={onSettings} disabled={popupOpen} aria-label="Settings" title="Settings">
+        <button
+          className="icon-btn"
+          type="button"
+          disabled={popupOpen}
+          aria-label="Settings"
+          title="Settings"
+          aria-haspopup="menu"
+          aria-expanded={menu !== null}
+          // Keeps the menu's outside-click close from reopening it on the same click.
+          onMouseDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            const box = event.currentTarget.getBoundingClientRect();
+            setMenu(menu ? null : { x: box.left, y: box.bottom + 2 });
+          }}
+        >
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <circle cx="12" cy="12" r="3" />
             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
@@ -37,6 +56,41 @@ export function TopBar({ folder, busy, popupOpen, onOpen, onSettings }: TopBarPr
         </div>
       )}
       <TitleControls />
+      {menu && (
+        <SettingsMenu
+          x={menu.x}
+          y={menu.y}
+          onClose={() => setMenu(null)}
+          onPick={(view) => {
+            setMenu(null);
+            onSettings(view);
+          }}
+        />
+      )}
     </header>
+  );
+}
+
+function SettingsMenu({
+  x,
+  y,
+  onClose,
+  onPick,
+}: {
+  x: number;
+  y: number;
+  onClose: () => void;
+  onPick: (view: SettingsView) => void;
+}) {
+  const ref = useAnchoredMenu(x, y, onClose);
+  return (
+    <div ref={ref} className="menu" role="menu" aria-label="Settings" style={{ left: x, top: y }}>
+      <button type="button" role="menuitem" onClick={() => onPick("pools")}>
+        Tag pools
+      </button>
+      <button type="button" role="menuitem" onClick={() => onPick("general")}>
+        Settings
+      </button>
+    </div>
   );
 }

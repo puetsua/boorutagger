@@ -12,6 +12,8 @@ const MAX_FOLDERS: usize = 30;
 const MAX_FILTER_TAGS: usize = 40;
 const MAX_PRESETS: usize = 30;
 const MAX_PRESET_NAME: usize = 40;
+const MAX_POOLS: usize = 50;
+const MAX_POOL_TAGS: usize = 100;
 const MIN_THRESHOLD: u32 = 5;
 const MAX_THRESHOLD: u32 = 95;
 const DEFAULT_THRESHOLD: u32 = 35;
@@ -28,12 +30,24 @@ pub struct FilterPreset {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TagPool {
+    pub id: String,
+    pub name: String,
+    #[serde(default)]
+    pub tags: Vec<String>,
+    #[serde(default)]
+    pub folder: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct FolderFilters {
     #[serde(default)]
     pub has_tags: Vec<String>,
     #[serde(default)]
     pub missing_tags: Vec<String>,
+    #[serde(default)]
+    pub hidden_pools: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -57,6 +71,8 @@ pub struct UserConfig {
     pub tagger_folder: Option<String>,
     #[serde(default = "default_threshold")]
     pub tagger_threshold: u32,
+    #[serde(default)]
+    pub tag_pools: Vec<TagPool>,
 }
 
 impl Default for UserConfig {
@@ -71,6 +87,7 @@ impl Default for UserConfig {
             filter_presets: Vec::new(),
             tagger_folder: None,
             tagger_threshold: DEFAULT_THRESHOLD,
+            tag_pools: Vec::new(),
         }
     }
 }
@@ -161,7 +178,34 @@ fn normalize(mut config: UserConfig) -> UserConfig {
     config.tagger_threshold = config.tagger_threshold.clamp(MIN_THRESHOLD, MAX_THRESHOLD);
     config.folder_filters = clean_folder_filters(config.folder_filters);
     config.filter_presets = clean_presets(config.filter_presets);
+    config.tag_pools = clean_pools(config.tag_pools);
     config
+}
+
+fn clean_pools(pools: Vec<TagPool>) -> Vec<TagPool> {
+    let mut seen = HashSet::new();
+    let mut cleaned = Vec::new();
+    for pool in pools {
+        let id = pool.id.trim().to_string();
+        let name = clean_preset_name(&pool.name);
+        let tags = clean_tag_list(pool.tags, MAX_POOL_TAGS);
+        if id.is_empty() || name.is_empty() || tags.is_empty() || !seen.insert(id.clone()) {
+            continue;
+        }
+        cleaned.push(TagPool {
+            id,
+            name,
+            tags,
+            folder: pool
+                .folder
+                .map(|folder| folder_key(&folder))
+                .filter(|folder| !folder.is_empty()),
+        });
+        if cleaned.len() == MAX_POOLS {
+            break;
+        }
+    }
+    cleaned
 }
 
 fn clean_presets(presets: Vec<FilterPreset>) -> Vec<FilterPreset> {
@@ -209,6 +253,7 @@ fn clean_folder_filters(filters: HashMap<String, FolderFilters>) -> HashMap<Stri
             FolderFilters {
                 has_tags: clean_tags(value.has_tags),
                 missing_tags: clean_tags(value.missing_tags),
+                hidden_pools: clean_ids(value.hidden_pools),
             },
         );
         if cleaned.len() == MAX_FOLDERS {
@@ -216,6 +261,15 @@ fn clean_folder_filters(filters: HashMap<String, FolderFilters>) -> HashMap<Stri
         }
     }
     cleaned
+}
+
+fn clean_ids(ids: Vec<String>) -> Vec<String> {
+    let mut seen = HashSet::new();
+    ids.into_iter()
+        .map(|id| id.trim().to_string())
+        .filter(|id| !id.is_empty() && seen.insert(id.clone()))
+        .take(MAX_POOLS)
+        .collect()
 }
 
 fn folder_key(folder: &str) -> String {
@@ -317,6 +371,7 @@ mod tests {
                 FolderFilters {
                     has_tags: vec!["1girl".into(), "blue hair".into()],
                     missing_tags: vec!["solo".into()],
+                    hidden_pools: vec![" comp ".into(), "comp".into()],
                 },
             )]),
             filter_presets: vec![FilterPreset {
@@ -327,6 +382,16 @@ mod tests {
             }],
             tagger_folder: Some(r" D:\models ".into()),
             tagger_threshold: 50,
+            tag_pools: vec![TagPool {
+                id: "comp".into(),
+                name: " Composition ".into(),
+                tags: vec![
+                    "Upper Body".into(),
+                    "cowboy shot".into(),
+                    "upper body".into(),
+                ],
+                folder: Some(r"D:\Data\Set\".into()),
+            }],
         };
         save_to(&path, &config).unwrap();
         let loaded = load_from(&path).unwrap();
@@ -341,10 +406,20 @@ mod tests {
         assert_eq!(loaded.tagger_folder.as_deref(), Some(r"D:\models"));
         assert_eq!(loaded.tagger_threshold, 50);
         assert_eq!(
+            loaded.tag_pools,
+            vec![TagPool {
+                id: "comp".into(),
+                name: "Composition".into(),
+                tags: vec!["upper body".into(), "cowboy shot".into()],
+                folder: Some(r"d:\data\set".into()),
+            }]
+        );
+        assert_eq!(
             loaded.folder_filters.get(r"d:\data\set"),
             Some(&FolderFilters {
                 has_tags: vec!["1girl".into(), "blue hair".into()],
                 missing_tags: vec!["solo".into()],
+                hidden_pools: vec!["comp".into()],
             })
         );
         assert_eq!(
@@ -377,6 +452,20 @@ mod tests {
             }],
             tagger_folder: Some("   ".into()),
             tagger_threshold: 99,
+            tag_pools: vec![
+                TagPool {
+                    id: "pool".into(),
+                    name: "   ".into(),
+                    tags: vec!["solo".into()],
+                    folder: None,
+                },
+                TagPool {
+                    id: "empty".into(),
+                    name: "Empty".into(),
+                    tags: vec![" ".into()],
+                    folder: None,
+                },
+            ],
         };
         save_to(&path, &config).unwrap();
         let loaded = load_from(&path).unwrap();
@@ -387,6 +476,7 @@ mod tests {
         assert!(loaded.filter_presets.is_empty());
         assert!(loaded.tagger_folder.is_none());
         assert_eq!(loaded.tagger_threshold, 95);
+        assert!(loaded.tag_pools.is_empty());
         let _ = fs::remove_dir_all(path.parent().unwrap());
     }
 }

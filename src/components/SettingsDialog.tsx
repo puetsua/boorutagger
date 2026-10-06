@@ -1,7 +1,20 @@
-import { useEffect, useRef, type CSSProperties } from "react";
-import { clampThreshold, GALLERY_VIEWS, MAX_THRESHOLD, MIN_THRESHOLD, type GalleryView, type Settings } from "../settings";
-import { clampCount } from "../tags";
+import { useEffect, useRef, useState, type CSSProperties, type HTMLAttributes, type ReactNode } from "react";
+import { reorderHandlers } from "../reorder";
+import {
+  clampThreshold,
+  folderKey,
+  GALLERY_VIEWS,
+  MAX_THRESHOLD,
+  MIN_THRESHOLD,
+  poolsFor,
+  type GalleryView,
+  type Settings,
+  type TagPool,
+} from "../settings";
+import { clampCount, parseTags } from "../tags";
 import type { TaggerState } from "../useTagger";
+
+export type SettingsView = "general" | "pools";
 
 const VIEW_LABELS: Record<GalleryView, string> = {
   masonry: "Masonry",
@@ -10,16 +23,18 @@ const VIEW_LABELS: Record<GalleryView, string> = {
 };
 
 type SettingsDialogProps = {
-  open: boolean;
+  view: SettingsView | null;
   settings: Settings;
+  folder: string | null;
   onClose: () => void;
   onChange: (settings: Settings) => void;
   tagger: TaggerState;
   onPickModelFolder: () => void;
 };
 
-export function SettingsDialog({ open, settings, onClose, onChange, tagger, onPickModelFolder }: SettingsDialogProps) {
+export function SettingsDialog({ view, settings, folder, onClose, onChange, tagger, onPickModelFolder }: SettingsDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const open = view !== null;
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -45,7 +60,22 @@ export function SettingsDialog({ open, settings, onClose, onChange, tagger, onPi
     {open && <div className="scrim" />}
     <dialog ref={dialogRef} className="settings" onClose={onClose}>
       <form method="dialog">
-        <h2>Settings</h2>
+        <div className="dialog-head">
+          <h2>{view === "pools" ? "Tag pools" : "Settings"}</h2>
+          <button className="icon-btn" type="button" aria-label="Close" title="Close" onClick={onClose}>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
+        </div>
+        {view === "pools" ? (
+          <TagPoolsSetting
+            pools={settings.tagPools}
+            folder={folder}
+            onChange={(tagPools) => onChange({ ...settings, tagPools })}
+          />
+        ) : (
+        <>
         <label className="setting check">
           <input
             type="checkbox"
@@ -90,12 +120,265 @@ export function SettingsDialog({ open, settings, onClose, onChange, tagger, onPi
           shown={(settings.taggerThreshold / 100).toFixed(2)}
           onChange={(taggerThreshold) => onChange({ ...settings, taggerThreshold: clampThreshold(taggerThreshold) })}
         />
-        <button className="quiet" type="submit">
-          Done
-        </button>
+        </>
+        )}
       </form>
     </dialog>
     </>
+  );
+}
+
+function TagPoolsSetting({
+  pools,
+  folder,
+  onChange,
+}: {
+  pools: readonly TagPool[];
+  folder: string | null;
+  onChange: (pools: TagPool[]) => void;
+}) {
+  const key = folder ? folderKey(folder) : null;
+
+  const shown = poolsFor(pools, folder);
+
+  function update(id: string, patch: Partial<TagPool>) {
+    onChange(pools.map((pool) => (pool.id === id ? { ...pool, ...patch } : pool)));
+  }
+
+  // Shown pools are a slice of every pool, so move by neighbour, and only within global or folder pools.
+  function move(from: number, to: number) {
+    const moving = shown[from];
+    const globals = shown.filter((pool) => !pool.folder).length;
+    const at = moving.folder ? Math.max(to, globals) : Math.min(to, globals - 1);
+    if (at === from) return;
+    const rest = pools.filter((pool) => pool !== moving);
+    rest.splice(rest.indexOf(shown[at]) + (at > from ? 1 : 0), 0, moving);
+    onChange(rest);
+  }
+
+  return (
+    <div className="setting">
+      <p>Tags you add with one click in the right pane and filter by on the left. A pool shows only in this folder unless Global is on.</p>
+      {shown.map((pool, index) => (
+        <PoolEditor
+          key={pool.id}
+          pool={pool}
+          rowProps={{ ...reorderHandlers(index, shown.length, false, move), "data-reorder-label": pool.name } as HTMLAttributes<HTMLDivElement>}
+          folderKey={key}
+          onChange={(patch) => update(pool.id, patch)}
+          onRemove={() => onChange(pools.filter((item) => item.id !== pool.id))}
+        />
+      ))}
+      <NewPool folderKey={key} onAdd={(pool) => onChange([...pools, pool])} />
+    </div>
+  );
+}
+
+function cleanPoolName(raw: string): string {
+  return raw.trim().replace(/\s+/g, " ");
+}
+
+function NewPool({ folderKey, onAdd }: { folderKey: string | null; onAdd: (pool: TagPool) => void }) {
+  const [name, setName] = useState("");
+  const [tags, setTags] = useState("");
+  const [folderOnly, setFolderOnly] = useState(true);
+  const clean = cleanPoolName(name);
+  const tagList = parseTags(tags);
+  const ready = Boolean(clean) && tagList.length > 0;
+
+  function add() {
+    if (!ready) return;
+    onAdd({ id: crypto.randomUUID(), name: clean, tags: tagList, folder: folderOnly ? folderKey : null });
+    setName("");
+    setTags("");
+    setFolderOnly(true);
+  }
+
+  return (
+    <PoolFields
+      footer={
+        <button className="icon-btn pool-add" type="button" aria-label="Add pool" title="Add pool" disabled={!ready} onClick={add}>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+        </button>
+      }
+      name={name}
+      onName={setName}
+      onEnter={add}
+      folderOnly={folderOnly}
+      folderKey={folderKey}
+      onFolderOnly={setFolderOnly}
+      tags={tags}
+      tagsLabel="Tags in the new pool"
+      onTags={setTags}
+    />
+  );
+}
+
+function PoolEditor({
+  pool,
+  rowProps,
+  folderKey,
+  onChange,
+  onRemove,
+}: {
+  pool: TagPool;
+  rowProps: HTMLAttributes<HTMLDivElement>;
+  folderKey: string | null;
+  onChange: (patch: Partial<TagPool>) => void;
+  onRemove: () => void;
+}) {
+  // Raw text stays local so a trailing comma survives while typing.
+  const [name, setName] = useState(pool.name);
+  const [tags, setTags] = useState(pool.tags.join(", "));
+  const [confirming, setConfirming] = useState(false);
+
+  return (
+    <PoolFields
+      rowProps={rowProps}
+      handle={
+        <span className="pool-grip" title="Drag to reorder" aria-hidden="true">
+          <svg viewBox="0 0 24 24">
+            <circle cx="9" cy="6" r="1" />
+            <circle cx="15" cy="6" r="1" />
+            <circle cx="9" cy="12" r="1" />
+            <circle cx="15" cy="12" r="1" />
+            <circle cx="9" cy="18" r="1" />
+            <circle cx="15" cy="18" r="1" />
+          </svg>
+        </span>
+      }
+      action={
+        <button
+          className="icon-btn warn"
+          type="button"
+          aria-label={`Remove ${pool.name}`}
+          title="Remove pool"
+          onClick={() => setConfirming(true)}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" />
+          </svg>
+        </button>
+      }
+      warning={
+        confirming && (
+          <div className="pool-head" role="alert">
+            <span className="pool-warn">Remove {pool.name} and its tags?</span>
+            <button className="quiet" type="button" onClick={() => setConfirming(false)}>
+              Cancel
+            </button>
+            <button className="quiet warn" type="button" onClick={onRemove}>
+              Remove
+            </button>
+          </div>
+        )
+      }
+      name={name}
+      onName={(value) => {
+        setName(value);
+        if (cleanPoolName(value)) onChange({ name: cleanPoolName(value) });
+      }}
+      onNameBlur={() => setName(pool.name)}
+      folderOnly={pool.folder !== null}
+      folderKey={folderKey}
+      onFolderOnly={(checked) => onChange({ folder: checked ? folderKey : null })}
+      tags={tags}
+      tagsLabel={`Tags in ${pool.name}`}
+      onTags={(value) => {
+        setTags(value);
+        if (parseTags(value).length) onChange({ tags: parseTags(value) });
+      }}
+      onTagsBlur={() => setTags(pool.tags.join(", "))}
+    />
+  );
+}
+
+function PoolFields({
+  rowProps,
+  handle,
+  action,
+  footer,
+  warning,
+  name,
+  onName,
+  onNameBlur,
+  onEnter,
+  folderOnly,
+  folderKey,
+  onFolderOnly,
+  tags,
+  tagsLabel,
+  onTags,
+  onTagsBlur,
+}: {
+  rowProps?: HTMLAttributes<HTMLDivElement>;
+  handle?: ReactNode;
+  action?: ReactNode;
+  footer?: ReactNode;
+  warning?: ReactNode;
+  name: string;
+  onName: (value: string) => void;
+  onNameBlur?: () => void;
+  onEnter?: () => void;
+  folderOnly: boolean;
+  folderKey: string | null;
+  onFolderOnly: (checked: boolean) => void;
+  tags: string;
+  tagsLabel: string;
+  onTags: (value: string) => void;
+  onTagsBlur?: () => void;
+}) {
+  const global = !folderOnly || !folderKey;
+  return (
+    <div {...rowProps} className={global ? "pool-edit global" : "pool-edit"}>
+      {warning || (
+        <div className="pool-head">
+          {handle}
+          <input
+            type="text"
+            aria-label="Pool name"
+            placeholder="Pool name"
+            spellCheck={false}
+            autoComplete="off"
+            maxLength={40}
+            value={name}
+            onChange={(event) => onName(event.target.value)}
+            onBlur={onNameBlur}
+            onKeyDown={(event) => {
+              if (event.key !== "Enter") return;
+              event.preventDefault();
+              onEnter?.();
+            }}
+          />
+          <button
+            className="icon-btn"
+            type="button"
+            aria-label="Global"
+            title={global ? "Global, shown in every folder" : "This folder only"}
+            aria-pressed={global}
+            disabled={!folderKey}
+            onClick={() => onFolderOnly(!folderOnly)}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="9" />
+              <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
+            </svg>
+          </button>
+          {action}
+        </div>
+      )}
+      <textarea
+        aria-label={tagsLabel}
+        placeholder="i.e. portrait, upper body, cowboy shot"
+        spellCheck={false}
+        value={tags}
+        onChange={(event) => onTags(event.target.value)}
+        onBlur={onTagsBlur}
+      />
+      {footer}
+    </div>
   );
 }
 
