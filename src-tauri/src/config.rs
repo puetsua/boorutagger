@@ -17,6 +17,8 @@ const MAX_POOL_TAGS: usize = 100;
 const MIN_THRESHOLD: u32 = 5;
 const MAX_THRESHOLD: u32 = 95;
 const DEFAULT_THRESHOLD: u32 = 35;
+const LEFT_PANE: (u32, u32, u32) = (160, 212, 480);
+const RIGHT_PANE: (u32, u32, u32) = (280, 372, 720);
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -27,6 +29,12 @@ pub struct FilterPreset {
     pub has_tags: Vec<String>,
     #[serde(default)]
     pub missing_tags: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PaneLayout {
+    pub width: u32,
+    pub open: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -73,6 +81,10 @@ pub struct UserConfig {
     pub tagger_threshold: u32,
     #[serde(default)]
     pub tag_pools: Vec<TagPool>,
+    #[serde(default = "default_left_pane")]
+    pub left_pane: PaneLayout,
+    #[serde(default = "default_right_pane")]
+    pub right_pane: PaneLayout,
 }
 
 impl Default for UserConfig {
@@ -88,6 +100,8 @@ impl Default for UserConfig {
             tagger_folder: None,
             tagger_threshold: DEFAULT_THRESHOLD,
             tag_pools: Vec::new(),
+            left_pane: default_left_pane(),
+            right_pane: default_right_pane(),
         }
     }
 }
@@ -109,6 +123,27 @@ fn default_threshold() -> u32 {
 
 fn default_gallery_view() -> String {
     "masonry".into()
+}
+
+fn default_left_pane() -> PaneLayout {
+    PaneLayout {
+        width: LEFT_PANE.1,
+        open: true,
+    }
+}
+
+fn default_right_pane() -> PaneLayout {
+    PaneLayout {
+        width: RIGHT_PANE.1,
+        open: true,
+    }
+}
+
+fn clamp_pane(pane: PaneLayout, (min, _, max): (u32, u32, u32)) -> PaneLayout {
+    PaneLayout {
+        width: pane.width.clamp(min, max),
+        ..pane
+    }
 }
 
 pub fn config_path() -> Result<PathBuf, String> {
@@ -179,6 +214,8 @@ fn normalize(mut config: UserConfig) -> UserConfig {
     config.folder_filters = clean_folder_filters(config.folder_filters);
     config.filter_presets = clean_presets(config.filter_presets);
     config.tag_pools = clean_pools(config.tag_pools);
+    config.left_pane = clamp_pane(config.left_pane, LEFT_PANE);
+    config.right_pane = clamp_pane(config.right_pane, RIGHT_PANE);
     config
 }
 
@@ -392,6 +429,14 @@ mod tests {
                 ],
                 folder: Some(r"D:\Data\Set\".into()),
             }],
+            left_pane: PaneLayout {
+                width: 300,
+                open: false,
+            },
+            right_pane: PaneLayout {
+                width: 400,
+                open: true,
+            },
         };
         save_to(&path, &config).unwrap();
         let loaded = load_from(&path).unwrap();
@@ -405,6 +450,20 @@ mod tests {
         assert_eq!(loaded.last_folder.as_deref(), Some(r"D:\data\set"));
         assert_eq!(loaded.tagger_folder.as_deref(), Some(r"D:\models"));
         assert_eq!(loaded.tagger_threshold, 50);
+        assert_eq!(
+            loaded.left_pane,
+            PaneLayout {
+                width: 300,
+                open: false
+            }
+        );
+        assert_eq!(
+            loaded.right_pane,
+            PaneLayout {
+                width: 400,
+                open: true
+            }
+        );
         assert_eq!(
             loaded.tag_pools,
             vec![TagPool {
@@ -466,6 +525,14 @@ mod tests {
                     folder: None,
                 },
             ],
+            left_pane: PaneLayout {
+                width: 10,
+                open: true,
+            },
+            right_pane: PaneLayout {
+                width: 9000,
+                open: true,
+            },
         };
         save_to(&path, &config).unwrap();
         let loaded = load_from(&path).unwrap();
@@ -477,6 +544,8 @@ mod tests {
         assert!(loaded.tagger_folder.is_none());
         assert_eq!(loaded.tagger_threshold, 95);
         assert!(loaded.tag_pools.is_empty());
+        assert_eq!(loaded.left_pane.width, 160);
+        assert_eq!(loaded.right_pane.width, 720);
         let _ = fs::remove_dir_all(path.parent().unwrap());
     }
 }

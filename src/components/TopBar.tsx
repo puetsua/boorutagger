@@ -1,6 +1,7 @@
 import { useState } from "react";
 import mark from "../../src-tauri/icons/32x32.png";
 import { useAnchoredMenu } from "./ImageMenu";
+import type { PaneSide } from "../settings";
 import type { SettingsView } from "./SettingsDialog";
 import { TitleControls } from "./TitleControls";
 import { toggleMaximizeWindow } from "../window";
@@ -13,11 +14,25 @@ type TopBarProps = {
   onSettings: (view: SettingsView) => void;
   onAbout: () => void;
   updateVersion: string | null;
+  leftOpen: boolean;
+  rightOpen: boolean;
+  onTogglePane: (side: PaneSide) => void;
 };
 
 type MenuPick = SettingsView | "about";
 
-export function TopBar({ folder, busy, popupOpen, onOpen, onSettings, onAbout, updateVersion }: TopBarProps) {
+export function TopBar({
+  folder,
+  busy,
+  popupOpen,
+  onOpen,
+  onSettings,
+  onAbout,
+  updateVersion,
+  leftOpen,
+  rightOpen,
+  onTogglePane,
+}: TopBarProps) {
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
 
   return (
@@ -58,6 +73,36 @@ export function TopBar({ folder, busy, popupOpen, onOpen, onSettings, onAbout, u
       {folder && (
         <div className="path" data-tauri-drag-region title={folder} onDoubleClick={toggleMaximizeWindow}>
           {folder}
+        </div>
+      )}
+      {folder && (
+        <div className="pane-toggles">
+          <button
+            className="icon-btn"
+            type="button"
+            aria-label="Working set"
+            title={leftOpen ? "Hide working set" : "Show working set"}
+            aria-pressed={leftOpen}
+            onClick={() => onTogglePane("left")}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="3" y="4" width="18" height="16" rx="2" />
+              <path d="M9 4v16" />
+            </svg>
+          </button>
+          <button
+            className="icon-btn"
+            type="button"
+            aria-label="Caption sheet"
+            title={rightOpen ? "Hide caption sheet" : "Show caption sheet"}
+            aria-pressed={rightOpen}
+            onClick={() => onTogglePane("right")}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="3" y="4" width="18" height="16" rx="2" />
+              <path d="M15 4v16" />
+            </svg>
+          </button>
         </div>
       )}
       <TitleControls />

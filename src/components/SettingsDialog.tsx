@@ -157,19 +157,21 @@ function TagPoolsSetting({
   }
 
   return (
-    <div className="setting">
+    <div className="setting pools">
       <p>Tags you add with one click in the right pane and filter by on the left. A pool shows only in this folder unless Global is on.</p>
-      {shown.map((pool, index) => (
-        <PoolEditor
-          key={pool.id}
-          pool={pool}
-          rowProps={{ ...reorderHandlers(index, shown.length, false, move), "data-reorder-label": pool.name } as HTMLAttributes<HTMLDivElement>}
-          folderKey={key}
-          onChange={(patch) => update(pool.id, patch)}
-          onRemove={() => onChange(pools.filter((item) => item.id !== pool.id))}
-        />
-      ))}
-      <NewPool folderKey={key} onAdd={(pool) => onChange([...pools, pool])} />
+      <div className="pool-list">
+        {shown.map((pool, index) => (
+          <PoolEditor
+            key={pool.id}
+            pool={pool}
+            rowProps={{ ...reorderHandlers(index, shown.length, false, move), "data-reorder-label": pool.name } as HTMLAttributes<HTMLDivElement>}
+            folderKey={key}
+            onChange={(patch) => update(pool.id, patch)}
+            onRemove={() => onChange(pools.filter((item) => item.id !== pool.id))}
+          />
+        ))}
+      </div>
+      <NewPool folderKey={key} startOpen={shown.length === 0} onAdd={(pool) => onChange([...pools, pool])} />
     </div>
   );
 }
@@ -178,7 +180,16 @@ function cleanPoolName(raw: string): string {
   return raw.trim().replace(/\s+/g, " ");
 }
 
-function NewPool({ folderKey, onAdd }: { folderKey: string | null; onAdd: (pool: TagPool) => void }) {
+function NewPool({
+  folderKey,
+  startOpen,
+  onAdd,
+}: {
+  folderKey: string | null;
+  startOpen: boolean;
+  onAdd: (pool: TagPool) => void;
+}) {
+  const [open, setOpen] = useState(startOpen);
   const [name, setName] = useState("");
   const [tags, setTags] = useState("");
   const [folderOnly, setFolderOnly] = useState(true);
@@ -195,7 +206,14 @@ function NewPool({ folderKey, onAdd }: { folderKey: string | null; onAdd: (pool:
   }
 
   return (
+    <>
+    <button className="fold pool-new" type="button" aria-expanded={open} onClick={() => setOpen(!open)}>
+      <span className="fold-mark" />
+      New pool
+    </button>
+    {open && (
     <PoolFields
+      isNew
       footer={
         <button className="icon-btn pool-add" type="button" aria-label="Add pool" title="Add pool" disabled={!ready} onClick={add}>
           <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -213,6 +231,8 @@ function NewPool({ folderKey, onAdd }: { folderKey: string | null; onAdd: (pool:
       tagsLabel="Tags in the new pool"
       onTags={setTags}
     />
+    )}
+    </>
   );
 }
 
@@ -296,6 +316,7 @@ function PoolEditor({
 }
 
 function PoolFields({
+  isNew,
   rowProps,
   handle,
   action,
@@ -313,6 +334,7 @@ function PoolFields({
   onTags,
   onTagsBlur,
 }: {
+  isNew?: boolean;
   rowProps?: HTMLAttributes<HTMLDivElement>;
   handle?: ReactNode;
   action?: ReactNode;
@@ -332,7 +354,7 @@ function PoolFields({
 }) {
   const global = !folderOnly || !folderKey;
   return (
-    <div {...rowProps} className={global ? "pool-edit global" : "pool-edit"}>
+    <div {...rowProps} className={`pool-edit${isNew ? " new" : ""}${global ? " global" : ""}`}>
       {warning || (
         <div className="pool-head">
           {handle}

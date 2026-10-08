@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { errorMessage, imageSrc, inTauri, loadUserConfig, pickFolder, renameImage, revealImage, saveUserConfig, scanDataset, suggestTags, type ScannedImage } from "./api";
 import { CaptionSheet } from "./components/CaptionSheet";
@@ -7,6 +7,7 @@ import { fileParts, ImageMenu, RenameDialog } from "./components/ImageMenu";
 import { ResizeEdges } from "./components/ResizeEdges";
 import { AboutDialog } from "./components/AboutDialog";
 import { SettingsDialog, type SettingsView } from "./components/SettingsDialog";
+import { Splitter } from "./components/Splitter";
 import { StartScreen } from "./components/StartScreen";
 import { TopBar } from "./components/TopBar";
 import { WorkingSet } from "./components/WorkingSet";
@@ -33,6 +34,8 @@ import {
   upsertFilterPreset,
   type FilterPreset,
   type FolderFilters,
+  type PaneLayout,
+  type PaneSide,
   type Settings,
 } from "./settings";
 import { imageVisible, joinTags, moveItem, needsCaption, normTag, parseTags } from "./tags";
@@ -79,6 +82,10 @@ function dropMissing(selected: Set<string>, ids: Set<string>): Set<string> {
     if (!ids.has(id)) return new Set([...selected].filter((item) => ids.has(item)));
   }
   return selected;
+}
+
+function captionMap(images: readonly ImageItem[]): Map<string, string> {
+  return new Map(images.map((image) => [image.id, image.caption]));
 }
 
 function countLabel(count: number, singular: string, plural: string) {
@@ -184,9 +191,24 @@ export default function App() {
     () => ({ query, needsCaption: onlyEmpty, hasTags, missingTags }),
     [query, onlyEmpty, hasTags, missingTags],
   );
+  // Filter on captions as they were when the filter last changed, so an edit never hides its image.
+  const [filtered, setFiltered] = useState(() => ({ filters, captions: captionMap(images) }));
+  if (filtered.filters !== filters) setFiltered({ filters, captions: captionMap(images) });
   const visible = useMemo(
-    () => images.filter((image) => imageVisible(image.name, image.caption, filters)),
-    [images, filters],
+    () =>
+      images.filter((image) => imageVisible(image.name, filtered.captions.get(image.id) ?? image.caption, filters)),
+    [images, filters, filtered],
+  );
+  const refilter = useCallback(
+    () => setFiltered((current) => ({ ...current, captions: captionMap(imagesRef.current) })),
+    [],
+  );
+  const filterStale = useMemo(
+    () => {
+      const shown = new Set(visible);
+      return images.some((image) => shown.has(image) !== imageVisible(image.name, image.caption, filters));
+    },
+    [images, visible, filters],
   );
   visibleRef.current = visible;
 
@@ -537,7 +559,8 @@ export default function App() {
       else next.add(id);
       setAnchorId(id);
     } else {
-      next = new Set([id]);
+      // Clicking the only selected image again clears it.
+      next = next.size === 1 && next.has(id) ? new Set() : new Set([id]);
       setAnchorId(id);
     }
     setSelected(next);
@@ -723,6 +746,11 @@ export default function App() {
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
+      if (event.key === "F5") {
+        event.preventDefault();
+        refilter();
+        return;
+      }
       const target = event.target as HTMLElement | null;
       if (settingsOpenRef.current || target?.closest("input, textarea, .chip, .trow, dialog")) return;
       if (event.key === "Escape") {
@@ -753,7 +781,12 @@ export default function App() {
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, []);
+  }, [refilter]);
+
+  function setPane(side: PaneSide, patch: Partial<PaneLayout>) {
+    const key = side === "left" ? "leftPane" : "rightPane";
+    setSettings((current) => ({ ...current, [key]: { ...current[key], ...patch } }));
+  }
 
   return (
     <div className="app">
@@ -766,11 +799,28 @@ export default function App() {
         onSettings={setSettingsView}
         onAbout={() => setAboutOpen(true)}
         updateVersion={updater.update?.version ?? null}
+        leftOpen={settings.leftPane.open}
+        rightOpen={settings.rightPane.open}
+        onTogglePane={(side) => setPane(side, { open: !(side === "left" ? settings.leftPane : settings.rightPane).open })}
       />
       {!folder ? (
         <StartScreen busy={busy} onOpen={() => void openFolder()} />
       ) : (
-      <div className="body">
+      <div
+        className={`body${settings.leftPane.open ? "" : " left-closed"}${settings.rightPane.open ? "" : " right-closed"}`}
+        style={
+          {
+            "--left-pane": settings.leftPane.open ? `${settings.leftPane.width}px` : "0px",
+            "--right-pane": settings.rightPane.open ? `${settings.rightPane.width}px` : "0px",
+          } as CSSProperties
+        }
+      >
+        {settings.leftPane.open && (
+          <Splitter side="left" width={settings.leftPane.width} onResize={(width) => setPane("left", { width })} />
+        )}
+        {settings.rightPane.open && (
+          <Splitter side="right" width={settings.rightPane.width} onResize={(width) => setPane("right", { width })} />
+        )}
         <WorkingSet
           total={images.length}
           shown={visible.length}
@@ -806,6 +856,8 @@ export default function App() {
             else setMissingTags(missingTags.filter((item) => item !== tag));
           }}
           onClear={clearFilters}
+          filterStale={filterStale}
+          onRefilter={refilter}
         />
         <ImageGrid
           gridRef={gridRef}

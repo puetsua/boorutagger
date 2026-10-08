@@ -257,9 +257,6 @@ export function CaptionSheet({
             spellCheck={false}
             autoComplete="off"
           />
-          <button className="quiet" type="submit">
-            Add
-          </button>
         </form>
         {count === 1 && taggerReady && preview && (
           <AiTags key={preview.src} path={preview.path} owned={ownedTags} onSuggest={onSuggest} onAdd={onAddTag} />

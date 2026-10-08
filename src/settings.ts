@@ -9,6 +9,7 @@ const MAX_POOLS = 50;
 const MAX_POOL_TAGS = 100;
 export const MIN_THRESHOLD = 5;
 export const MAX_THRESHOLD = 95;
+export const PANE_LIMITS = { left: [160, 480], right: [280, 720] } as const;
 
 const SETTINGS_KEY = "boorutagger-settings";
 
@@ -24,6 +25,15 @@ export type Settings = {
   taggerFolder: string | null;
   taggerThreshold: number;
   tagPools: TagPool[];
+  leftPane: PaneLayout;
+  rightPane: PaneLayout;
+};
+
+export type PaneSide = keyof typeof PANE_LIMITS;
+
+export type PaneLayout = {
+  width: number;
+  open: boolean;
 };
 
 export type TagPool = {
@@ -60,6 +70,8 @@ export const DEFAULT_SETTINGS: Settings = {
   taggerFolder: null,
   taggerThreshold: 35,
   tagPools: [],
+  leftPane: { width: 212, open: true },
+  rightPane: { width: 372, open: true },
 };
 
 export function parseGalleryView(value: unknown): GalleryView {
@@ -77,7 +89,21 @@ export function parseSettings(raw: unknown): Settings {
     taggerFolder: typeof parsed.taggerFolder === "string" && parsed.taggerFolder.trim() ? parsed.taggerFolder.trim() : null,
     taggerThreshold: clampThreshold(parsed.taggerThreshold ?? DEFAULT_SETTINGS.taggerThreshold),
     tagPools: parseTagPools(parsed.tagPools),
+    leftPane: parsePane(parsed.leftPane, "left"),
+    rightPane: parsePane(parsed.rightPane, "right"),
   };
+}
+
+function parsePane(raw: unknown, side: PaneSide): PaneLayout {
+  const fallback = side === "left" ? DEFAULT_SETTINGS.leftPane : DEFAULT_SETTINGS.rightPane;
+  const parsed = raw && typeof raw === "object" ? (raw as Partial<PaneLayout>) : {};
+  return { width: clampPane(side, parsed.width ?? fallback.width), open: parsed.open !== false };
+}
+
+export function clampPane(side: PaneSide, width: number): number {
+  const [min, max] = PANE_LIMITS[side];
+  const n = Math.round(Number(width));
+  return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : min;
 }
 
 function parseTagPools(raw: unknown): TagPool[] {

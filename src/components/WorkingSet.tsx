@@ -25,6 +25,8 @@ type WorkingSetProps = {
   onAddFilter: (kind: "has" | "missing", raw: string) => void;
   onRemoveFilter: (kind: "has" | "missing", tag: string) => void;
   onClear: () => void;
+  filterStale: boolean;
+  onRefilter: () => void;
 };
 
 export function WorkingSet({
@@ -50,6 +52,8 @@ export function WorkingSet({
   onAddFilter,
   onRemoveFilter,
   onClear,
+  filterStale,
+  onRefilter,
 }: WorkingSetProps) {
   const [hasDraft, setHasDraft] = useState("");
   const [missDraft, setMissDraft] = useState("");
@@ -128,189 +132,202 @@ export function WorkingSet({
 
   return (
     <aside className="filters" aria-label="Working set">
-      <h2>Working set</h2>
-      <label className="kicker" htmlFor="search">
-        Find
-      </label>
-      <input
-        id="search"
-        type="text"
-        placeholder="Filename or tag"
-        spellCheck={false}
-        autoComplete="off"
-        value={query}
-        onChange={(event) => onQuery(event.target.value)}
-      />
-      <button
-        className="preset"
-        type="button"
-        aria-pressed={activePreset === "all"}
-        onClick={() => onPreset("all")}
-      >
-        All images<span>{total}</span>
-      </button>
-      <button
-        className="preset"
-        type="button"
-        aria-pressed={activePreset === "empty"}
-        onClick={() => onPreset("empty")}
-      >
-        Untagged<span>{emptyCount}</span>
-      </button>
-      {presets.map((preset) => (
-        <div className="preset-row" key={preset.id}>
-          {editingId === preset.id ? (
-            <input
-              className="preset-name"
-              type="text"
-              aria-label={`Preset name for ${preset.name}`}
-              spellCheck={false}
-              autoComplete="off"
-              autoFocus
-              maxLength={40}
-              value={editName}
-              onFocus={(event) => event.currentTarget.select()}
-              onChange={(event) => setEditName(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  commitRename();
-                } else if (event.key === "Escape") {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  cancelRename();
-                }
-              }}
-              onBlur={() => {
-                if (skipSave.current) {
-                  skipSave.current = false;
-                  return;
-                }
-                commitRename();
-              }}
-            />
-          ) : (
-            <button
-              className="preset"
-              type="button"
-              title={`${presetDetail(preset)}. Double-click to rename.`}
-              aria-pressed={selectedPresetId === preset.id}
-              onClick={() => {
-                if (selectedPresetId === preset.id) startRename(preset);
-                else onApplySaved(preset.id);
-              }}
-              onDoubleClick={() => startRename(preset)}
-              onContextMenu={(event) => {
-                event.preventDefault();
-                setPresetMenu({ id: preset.id, x: event.clientX, y: event.clientY });
-              }}
-            >
-              {preset.name}
-            </button>
-          )}
-        </div>
-      ))}
-      {canSave && !naming && (
-        <div className="preset-actions">
-          {overridePreset ? (
-            <button className="preset save" type="button" onClick={() => onOverridePreset(overridePreset.id)}>
-              Save
-            </button>
-          ) : (
-            <button className="preset save" type="button" onClick={startNaming}>
-              Save
-            </button>
-          )}
-          {overridePreset && (
-            <button className="preset save" type="button" onClick={startNaming}>
-              Save as new
-            </button>
-          )}
-        </div>
-      )}
-      {canSave && naming && (
+      <div className="filters-body">
+        <h2>Working set</h2>
+        <label className="kicker" htmlFor="search">
+          Find
+        </label>
         <input
-          className="preset-name"
+          id="search"
           type="text"
-          placeholder="Preset name"
+          placeholder="Filename or tag"
           spellCheck={false}
           autoComplete="off"
-          autoFocus
-          maxLength={40}
-          value={presetName}
-          onFocus={(event) => event.currentTarget.select()}
-          onChange={(event) => setPresetName(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              event.preventDefault();
+          value={query}
+          onChange={(event) => onQuery(event.target.value)}
+        />
+        <button
+          className="preset"
+          type="button"
+          aria-pressed={activePreset === "all"}
+          onClick={() => onPreset("all")}
+        >
+          All images<span>{total}</span>
+        </button>
+        <button
+          className="preset"
+          type="button"
+          aria-pressed={activePreset === "empty"}
+          onClick={() => onPreset("empty")}
+        >
+          Untagged<span>{emptyCount}</span>
+        </button>
+        {presets.map((preset) => (
+          <div className="preset-row" key={preset.id}>
+            {editingId === preset.id ? (
+              <input
+                className="preset-name"
+                type="text"
+                aria-label={`Preset name for ${preset.name}`}
+                spellCheck={false}
+                autoComplete="off"
+                autoFocus
+                maxLength={40}
+                value={editName}
+                onFocus={(event) => event.currentTarget.select()}
+                onChange={(event) => setEditName(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    commitRename();
+                  } else if (event.key === "Escape") {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    cancelRename();
+                  }
+                }}
+                onBlur={() => {
+                  if (skipSave.current) {
+                    skipSave.current = false;
+                    return;
+                  }
+                  commitRename();
+                }}
+              />
+            ) : (
+              <button
+                className="preset"
+                type="button"
+                title={`${presetDetail(preset)}. Double-click to rename.`}
+                aria-pressed={selectedPresetId === preset.id}
+                onClick={() => {
+                  if (selectedPresetId === preset.id) startRename(preset);
+                  else onApplySaved(preset.id);
+                }}
+                onDoubleClick={() => startRename(preset)}
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  setPresetMenu({ id: preset.id, x: event.clientX, y: event.clientY });
+                }}
+              >
+                {preset.name}
+              </button>
+            )}
+          </div>
+        ))}
+        {canSave && !naming && (
+          <div className="preset-actions">
+            {overridePreset ? (
+              <button className="preset save" type="button" onClick={() => onOverridePreset(overridePreset.id)}>
+                Save
+              </button>
+            ) : (
+              <button className="preset save" type="button" onClick={startNaming}>
+                Save
+              </button>
+            )}
+            {overridePreset && (
+              <button className="preset save" type="button" onClick={startNaming}>
+                Save as new
+              </button>
+            )}
+          </div>
+        )}
+        {canSave && naming && (
+          <input
+            className="preset-name"
+            type="text"
+            placeholder="Preset name"
+            spellCheck={false}
+            autoComplete="off"
+            autoFocus
+            maxLength={40}
+            value={presetName}
+            onFocus={(event) => event.currentTarget.select()}
+            onChange={(event) => setPresetName(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                commitName();
+              } else if (event.key === "Escape") {
+                event.preventDefault();
+                event.stopPropagation();
+                cancelNaming();
+              }
+            }}
+            onBlur={() => {
+              if (skipSave.current) {
+                skipSave.current = false;
+                return;
+              }
               commitName();
-            } else if (event.key === "Escape") {
-              event.preventDefault();
-              event.stopPropagation();
-              cancelNaming();
-            }
-          }}
-          onBlur={() => {
-            if (skipSave.current) {
-              skipSave.current = false;
-              return;
-            }
-            commitName();
+            }}
+          />
+        )}
+        <hr className="split" />
+        <div className="kicker">Has tag</div>
+        <FilterChips tags={hasTags} kind="has" onRemove={onRemoveFilter} />
+        <input
+          type="text"
+          list={hasDraft.startsWith("/") ? "pool-commands" : "vocab"}
+          placeholder="Add a tag, or / for a tag pool"
+          spellCheck={false}
+          autoComplete="off"
+          value={hasDraft}
+          onChange={(event) => changeDraft("has", event.target.value, event.nativeEvent, setHasDraft)}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter") return;
+            event.preventDefault();
+            if (submitFilter("has", hasDraft)) setHasDraft("");
           }}
         />
-      )}
-      <hr className="split" />
-      <div className="kicker">Has tag</div>
-      <FilterChips tags={hasTags} kind="has" onRemove={onRemoveFilter} />
-      <input
-        type="text"
-        list={hasDraft.startsWith("/") ? "pool-commands" : "vocab"}
-        placeholder="Add a tag, or / for a tag pool"
-        spellCheck={false}
-        autoComplete="off"
-        value={hasDraft}
-        onChange={(event) => changeDraft("has", event.target.value, event.nativeEvent, setHasDraft)}
-        onKeyDown={(event) => {
-          if (event.key !== "Enter") return;
-          event.preventDefault();
-          if (submitFilter("has", hasDraft)) setHasDraft("");
-        }}
-      />
-      <div className="kicker">Without tag</div>
-      <FilterChips tags={missingTags} kind="missing" onRemove={onRemoveFilter} />
-      <input
-        type="text"
-        list={missDraft.startsWith("/") ? "pool-commands" : "vocab"}
-        placeholder="Add a tag, or / for a tag pool"
-        spellCheck={false}
-        autoComplete="off"
-        value={missDraft}
-        onChange={(event) => changeDraft("missing", event.target.value, event.nativeEvent, setMissDraft)}
-        onKeyDown={(event) => {
-          if (event.key !== "Enter") return;
-          event.preventDefault();
-          if (submitFilter("missing", missDraft)) setMissDraft("");
-        }}
-      />
-      <datalist id="pool-commands">
-        {pools.map((pool) => (
-          <option key={pool.id} value={`/${pool.name}`} />
-        ))}
-      </datalist>
-      {filtering && (
-        <button
-          className="preset clear-filters"
-          type="button"
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={() => {
-            if (naming) cancelNaming();
-            if (editingId) cancelRename();
-            onClear();
+        <div className="kicker">Without tag</div>
+        <FilterChips tags={missingTags} kind="missing" onRemove={onRemoveFilter} />
+        <input
+          type="text"
+          list={missDraft.startsWith("/") ? "pool-commands" : "vocab"}
+          placeholder="Add a tag, or / for a tag pool"
+          spellCheck={false}
+          autoComplete="off"
+          value={missDraft}
+          onChange={(event) => changeDraft("missing", event.target.value, event.nativeEvent, setMissDraft)}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter") return;
+            event.preventDefault();
+            if (submitFilter("missing", missDraft)) setMissDraft("");
           }}
-        >
-          Clear filters
-        </button>
-      )}
+        />
+        <datalist id="pool-commands">
+          {pools.map((pool) => (
+            <option key={pool.id} value={`/${pool.name}`} />
+          ))}
+        </datalist>
+        {filterStale && (
+          <button
+            className="preset refresh-filters"
+            type="button"
+            title="Apply the filters to edited tags"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={onRefilter}
+          >
+            Refresh
+          </button>
+        )}
+        {filtering && (
+          <button
+            className="preset clear-filters"
+            type="button"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => {
+              if (naming) cancelNaming();
+              if (editingId) cancelRename();
+              onClear();
+            }}
+          >
+            Clear filters
+          </button>
+        )}
+      </div>
       <div className="shown">
         {shown} of {total} shown
       </div>
