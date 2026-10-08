@@ -10,7 +10,7 @@ Open a folder of images. Filter the working set, select one image or many, and e
 
 ## Install
 
-The Windows installer is published from version tags. The current release is [0.5.0](https://github.com/puetsua/boorutagger/releases/tag/0.5.0). From 0.5.0 on, the app checks for updates at launch, and About in the gear menu installs them.
+The Windows installer is published from version tags. The current release is [0.6.0](https://github.com/puetsua/boorutagger/releases/tag/0.6.0). From 0.5.0 on, the app checks for updates at launch, and About in the gear menu installs them.
 
 ## Develop
 
